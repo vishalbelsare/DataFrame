@@ -1,5 +1,5 @@
 <!--
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -24,114 +24,83 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
+
+<HTML>
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="DataFrame is a templatized and heterogeneous C++ container designed for data analysis for statistical, machine-learning, or financial applications. You can think of data-frame as a two-dimensional data structure of columns and rows just like an Excel spreadsheet, or a SQL table. But in case of C++ DataFrame, your data needn't be two-dimensional necessarily. Columns in the C++ DataFrame could be vectors of any type, including DataFrames or other containers. So, a C++ DataFrame can be of any dimension. Columns are the first-class citizens of DataFrame, meaning operations and access to columns is far more efficient and easier than dealing with data row by row. That's the logical layout of the data. C++ DataFrame also includes an intuitive API for data analysis and analytics. The API is designed to be open-ended meaning you can easily include your own custom algorithms.">
+  <meta name="keywords" content="CPP, C++, DataFrame, data-science, machine-learning, AI, statistical-analysis, data-analysis, trading-strategies, statistical, numerical-analysis, tensorboard, financial-engineering, large-data, tensorboard, financial-data-analysis, multidimensional-data">
+  <meta name="author" content="Hossein Moein">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- OpenGraph for social sharing -->
+  <meta property="og:title" content="DataFrame — High-Performance Data Analysis in C++">
+  <meta property="og:description" content="Fast C++ DataFrame library for tabular data analysis, filtering, grouping, and numerical computation.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://hosseinmoein.github.io/DataFrame/">
+  <meta property="og:image" content="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg">
+
+  <link rel="icon" type="image/jpeg" href="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg">
+  <link rel="canonical" href="https://hosseinmoein.github.io/DataFrame/docs/HTML/DataFrame.html">
+</head>
+</HTML>
+
+[![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://isocpp.org/std/the-standard )
 [![Build status](https://ci.appveyor.com/api/projects/status/hjw01qui3bvxs8yi?svg=true)](https://ci.appveyor.com/project/hosseinmoein/dataframe)
-[![Build Status](https://travis-ci.org/hosseinmoein/DataFrame.svg?branch=master)](https://travis-ci.com/hosseinmoein/DataFrame)
-![GitHub](https://img.shields.io/github/license/hosseinmoein/DataFrame.svg?color=red&style=popout)
-![GitHub tag (latest by date)](https://img.shields.io/github/tag-date/hosseinmoein/DataFrame.svg?color=blue&label=Official%20Release&style=popout)<BR>
-[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/std/the-standard )
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/db646376a4014c3788c7224e670fe451)](https://app.codacy.com/manual/hosseinmoein/DataFrame?utm_source=github.com&utm_medium=referral&utm_content=hosseinmoein/DataFrame&utm_campaign=Badge_Grade_Dashboard)
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/hosseinmoein/DataFrame/master)
-[![Github All Releases](https://img.shields.io/github/downloads/hosseinmoein/DataFrame/total.svg)]()
-[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://GitHub.com/hosseinmoein/DataFrame/graphs/commit-activity)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/db646376a4014c3788c7224e670fe451)](https://app.codacy.com/organizations/gh/hosseinmoein/repositories)
+<BR>
+[![GitHub tag (latest by date)](https://img.shields.io/github/tag-date/hosseinmoein/DataFrame.svg?color=blue&label=Official%20Release&style=popout)](https://github.com/hosseinmoein/DataFrame/releases)
+[![Conan Center](https://img.shields.io/conan/v/dataframe)](https://conan.io/center/recipes/dataframe)
+[![VCPKG package](https://repology.org/badge/version-for-repo/vcpkg/dataframe.svg)](https://vcpkg.link/ports/dataframe)
 
-<!--
-[![HitCount](http://hits.dwyl.io/hosseinmoein/DataFrame.svg)](http://hits.dwyl.io/hosseinmoein/DataFrame)
--->
+<img src="docs/LionLookingUp.jpg" alt="DataFrame Lion" width="400"/>
 
-<img src="docs/LionLookingUp.jpg" alt="DataFrame Lion" width="400" longdesc="https://htmlpreview.github.io/?https://github.com/hosseinmoein/DataFrame/blob/master/docs/HTML/DataFrame.html"/>
+## <a href="https://hosseinmoein.github.io/DataFrame/docs/HTML/DataFrame.html" target="_blank"><B>DataFrame documentation with code samples</B></a>
 
-## [*DataFrame Documentation / Code Samples*](https://htmlpreview.github.io/?https://github.com/hosseinmoein/DataFrame/blob/master/docs/HTML/DataFrame.html)
-This is a C++ analytical library that provides interface and functionality similar to packages/libraries in Python and R. For example, you could compare this to Pandas or R data.frame.<BR>
-You could slice the data in many different ways. You could join, merge, group-by the data. You could run various statistical, summarization, financial, and ML algorithms on the data. You could add your custom algorithms easily. You could multi-column sort, custom pick and delete the data. And more …<BR>
-DataFrame also includes a large collection of analytical algorithms in form of visitors. These are from basic stats such as <I>Mean</I>, <I>Std Deviation</I>, <I>Return</I>, … to more involved analysis such as <I>Affinity Propagation</I>, <I>Polynomial Fit</I>, <I>Fast Fourier transform of arbitrary length</I> … including a good collection of trading indicators. You could also easily add your own algorithms.<BR>
-For basic operations to start you off, see [Hello World](test/hello_world.cc). For a complete list of features with code samples, see [documentation](https://htmlpreview.github.io/?https://github.com/hosseinmoein/DataFrame/blob/master/docs/HTML/DataFrame.html).
+DataFrame is a high-performance C++ library for in-memory data exploration, transformation, and statistical analysis — designed for data scientists, quant traders, and C++ developers who need efficient tabular data processing without Python overhead.
+This library is designed to provide similar functionalities to data manipulation and analysis tools found in other languages, such as Python's Pandas or R's data.frame. It aims to offer a robust and efficient way to handle tabular data in C++.
+The depth and breadth of functionalities offered by C++ DataFrame alone are greater than functionalities offered by packages such as Pandas, data.frame, and Polars combined.<BR><BR>
+You can slice the data in many ways. You can join, merge, group-by, cross tabulate, pivot the data. You can run various statistical, summarization, financial, and ML algorithms on the data. You can add your custom algorithms easily. You can multi-column sort, custom pick and delete the data. And much more ...<BR><BR>
+DataFrame also includes a large collection of analytical algorithms in form of visitors. These are from basic stats such as <I>Mean</I>, <I>Stdev</I>, <I>Moving Averages</I>, ... to more involved analysis such as <I>PCA</I>, <I>Polynomial Fit</I>, <I>FFT</I>, <I>Eigens</I> ... including a good collection of trading indicators. You can also easily add your own algorithms. Many of these algorithms work seamlessly with both scalar and multidimensional datasets.<BR>
+DataFrame also employs extensive multithreading in almost all its API’s, for large datasets. That makes DataFrame especially suitable for analyzing large datasets.<BR><BR>
+For basic operations to start you off, see [Hello World](examples/hello_world.cc) and/or [Cheat Sheet](https://docs.google.com/viewer?url=https://raw.githubusercontent.com/hosseinmoein/DataFrame/master/docs/CheatSheet.pdf). For a complete list of features with code samples, see <a href="https://hosseinmoein.github.io/DataFrame/docs/HTML/DataFrame.html" target="_blank">documentation</a>.
 
-I have followed a few <B>principles in this library</B>:<BR>
+---
 
-1.  Support any type either built-in or user defined without needing new code
-2.  Never chase pointers ala `linked lists`, `std::any`, `pointer to base`, ..., including `virtual functions`
-3.  Have all column data in continuous memory space. Also, be mindful of cache-line aliasing misses between multiple columns
-4.  Never use more space than you need ala `unions`, `std::variant`, ...
-5.  Avoid copying data as much as possible
-6.  Use multi-threading but only when it makes sense
-7.  Do not attempt to protect the user against `garbage in`, `garbage out`
+I have followed a few <font size="+0.5">**principles in this library**</font>:<BR>
 
-[DateTime](docs/DateTimeDoc.pdf)<BR>
-DateTime class included in this library is a very cool and handy object to manipulate date/time with nanosecond precision and multi timezone capability.<BR>
+1. [Support any type either built-in or user defined without needing new code](https://hosseinmoein.github.io/DataFrame/docs/HTML/any_type.html)
+2. [Never chase pointers ala _linked lists_, _std::any_, _pointer to base_, ...](https://hosseinmoein.github.io/DataFrame/docs/HTML/pointers.html)
+3. [Have all column data in contiguous memory space](https://hosseinmoein.github.io/DataFrame/docs/HTML/contiguous_memory.html)
+4. [Never use more space than you need ala _unions_, _std::variant_, ...](https://hosseinmoein.github.io/DataFrame/docs/HTML/std_variant.html)
+5. [Avoid copying data as much as possible](https://hosseinmoein.github.io/DataFrame/docs/HTML/copying_data.html)
+6. [Use multi-threading but only when it makes sense](https://hosseinmoein.github.io/DataFrame/docs/HTML/multithreading.html)
+7. [Do not attempt to protect the user against _garbage in_, _garbage out_](https://hosseinmoein.github.io/DataFrame/docs/HTML/garbage_in_garbage_out.html)
+8. [Keep DataFrame library self-contained, meaning DataFrame must only depend on _C++ language_ and its _standard library_](https://hosseinmoein.github.io/DataFrame/docs/HTML/self_contained.html)
 
 ---
 
 ### Performance
-There is a test program [_dataframe_performance_](test/dataframe_performance.cc) that should give you a sense of how this library performs. As a comparison, there is also a Pandas [_pandas_performance_](test/pandas_performance.py) script that does exactly the same thing.<BR>
-<I>dataframe_performance.cc</I> uses DataFrame <B>async interface</B> and is compiled with gcc (10.3.0) compiler with -O3 flag. <I>pandas_performance.py</I> is ran with Pandas 1.3.2, Numpy 1.21.2 and Python 3.7 on Xeon E5-2667 v2. What the test program roughly does:<BR>
 
-1.  Generate ~1.6 billion timestamps (second resolution) and load them into the DataFrame/Pandas as index.<BR>
-2.  Generate ~1.6 billion random numbers for 3 columns with normal, log normal, and exponential distributions and load them into the DataFrame/Pandas.<BR>
-3.  Calculate the mean of each of the 3 columns.<BR>
+You have probably heard of Polars DataFrame. It is implemented in Rust and ported with zero-overhead to Python (as long as you don’t have a loop). I have been asked by many people to write a comparison for <B>DataFrame vs. Polars</B>. So, I finally found some time to learn a bit about Polars and write a very simple benchmark.<BR>
+I wrote the following identical programs for both Polars and C++ DataFrame (and Pandas). I used Polars version: 0.19.14 (Pandas version: 1.5.3, Numpy version: 1.24.2). And I used C++23 GCC-14 compiler with -O3 option. I ran both on my, somewhat outdated, MacBook Pro (Intel chip, 96GB RAM).<BR>
+In both cases, I created a dataframe with 3 random columns. The C++ DataFrame also required an additional index column of the same size. Polars doesn’t believe in index columns (that has its own pros and cons. I am not going through it here).
+Each program has three identical parts. First it generates and populates 3 columns with 300m random numbers each (in case of C++ DataFrame, it must also generate a sequential index column of the same size). That is the part I am _not_ interested in. In the second part, it calculates the mean of the first column, the variance of the second column, and the Pearson correlation of the second and third columns. In the third part, it does a select (or filter as Polars calls it) on one of the columns.
 
-Result:
-```bash
-$ python3 test/pandas_performance.py
-Starting ... 1629817655
-All memory allocations are done. Calculating means ... 1629817883
-6.166675403767268e-05, 1.6487168460770107, 0.9999539627671375
-1629817894 ... Done
+**Results**:<BR>
+The maximum dataset I could load into Polars was 300m rows per column. Any bigger dataset blew up the memory and caused OS to kill it. I ran C++ DataFrame with 2b rows per column and I am sure it would have run with bigger datasets too. So, I was forced to run both with 300m rows to compare.
+I ran each test 4 times and took the best time. Polars numbers varied a lot from one run to another, especially calculation and selection times. C++ DataFrame numbers were significantly more consistent.
 
-real    5m51.598s
-user    3m3.485s
-sys     1m26.292s
 
-$ Release/bin/dataframe_performance
-Starting ... 1629818332
-All memory allocations are done. Calculating means ... 1629818535
-1, 1.64873, 1
-1629818536 ... Done
-  
-real    3m34.241s                                                                                                                      
-user    3m14.250s
-sys     0m25.983s
-```
-<B>The Interesting Part:</B><BR>
-1.  Pandas script, I believe, is entirely implemented in Numpy which is in C.
-2.  In case of Pandas, allocating memory + random number generation takes almost the same amount of time as calculating means.
-3.  In case of DataFrame ~90% of the time is spent in allocating memory + random number generation.
-4.  You load data once, but calculate statistics many times. So DataFrame, in general, is about ~11x faster than parts of Pandas that are implemented in Numpy. I leave parts of Pandas that are purely in Python to imagination.
-5.  Pandas process image at its peak is ~105GB. C++ DataFrame process image at its peak is ~56GB.
+|                      | [<B>C++ DataFrame</B>](https://github.com/hosseinmoein/DataFrame/blob/master/benchmarks/dataframe_performance.cc) | [&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<B>Polars</B>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;](https://github.com/hosseinmoein/DataFrame/blob/master/benchmarks/polars_performance.py) | [&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<B>Pandas</B>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;](https://github.com/hosseinmoein/DataFrame/blob/master/benchmarks/pandas_performance.py) |
+| :--------------------- | ------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Data Generation Time |                                                                                                      26.9459 secs |                                                                                                                                                                    28.4686 secs |                                                                                                                                                                    36.6799 secs |
+| Calculation Time     |                                                                                                       1.2602 secs |                                                                                                                                                                     4.8766 secs |                                                                                                                                                                    40.3264 secs |
+| Selection Time       |                                                                                                       0.4215 secs |                                                                                                                                                                     3.8766 secs |                                                                                                                                                                     8.3264 secs |
+| Overall Time         |                                                                                                      28.9486 secs |                                                                                                                                                                    36.8763 secs |                                                                                                                                                                    85.8451 secs |
 
 ---
 
-[DataFrame Test File](test/dataframe_tester.cc)<BR>
-[DataFrame Test File 2](test/dataframe_tester_2.cc)<BR>
-[Heterogeneous Vectors Test File](test/vectors_tester.cc)<BR>
-[Date/Time Test File](test/date_time_tester.cc)
+[**Please consider sponsoring DataFrame, especially if you are using it in production capacity. It is the strongest form of appreciation**](https://github.com/sponsors/hosseinmoein)
 
 ---
-
-[Contributions](docs/CONTRIBUTING.md)<BR>
-[License](License)
-
----
-
-### Installing using CMake
-```bash
-mkdir [Debug | Release]
-cd [Debug | Release]
-cmake -DCMAKE_BUILD_TYPE=[Debug | Release] ..
-make
-make install
-
-cd [Debug | Release]
-make uninstall
-```
-
-### Package managers
-If you are using _Conan_ to manage your dependencies, add `dataframe/x.y.z@` to your requires, where `x.y.z` is the release version you want to use. _Conan_ will acquire DataFrame, build it from source in your computer, and provide CMake integration support for your projects. See the [_Conan_ docs](https://docs.conan.io/en/latest/) for more information.<BR> Sample `conanfile.txt`:
-
-```text
-[requires]
-dataframe/1.19.0@
-
-[generators]
-cmake
-```
-DataFrame is also available on [_Microsoft VCPKG_](https://vcpkg.io/en/index.html) platform

@@ -1,5 +1,5 @@
 <!--
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -24,22 +24,33 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
 <!DOCTYPE html>
 <html>
-<body>
 
-  <table align="center" border="1">
+<head>
+<style>
+body {
+  background-image: linear-gradient(Azure, AliceBlue, GhostWhite, WhiteSmoke);
+}
+</style>
+</head>
+
+<body style="font-family: Georgia, serif">
+
+  <font size="+3">&#8592;</font> <a href="https://hosseinmoein.github.io/DataFrame/docs/HTML/DataFrame.html">Back to Documentations</a><BR><BR>
+  
+  <table border="1">
 
     <tr bgcolor="lightblue">
       <th>Signature</th> <th>Description</th>
     </tr>
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-enum class rank_policy : unsigned char  {
-    average = 1, // Average of ranks, if an item is repeated
-    first = 2,   // First rank, if an item is repeated
-    last = 3,    // Last rank, if an item is repeated
-    actual = 4,  // The actual rank of each item based on stable sort
-};</B></PRE> </font>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">enum</span> <span style="color:#800000; font-weight:bold; ">class</span> rank_policy <span style="color:#800080; ">:</span> <span style="color:#800000; font-weight:bold; ">unsigned</span> <span style="color:#800000; font-weight:bold; ">char</span>  <span style="color:#800080; ">{</span></span>
+<span class="line_wrapper">    average <span style="color:#808030; ">=</span> <span style="color:#008c00; ">1</span><span style="color:#808030; ">,</span> <span style="color:#696969; ">// Average of ranks, if an item is repeated</span></span>
+<span class="line_wrapper">    first <span style="color:#808030; ">=</span> <span style="color:#008c00; ">2</span><span style="color:#808030; ">,</span>   <span style="color:#696969; ">// First rank, if an item is repeated</span></span>
+<span class="line_wrapper">    last <span style="color:#808030; ">=</span> <span style="color:#008c00; ">3</span><span style="color:#808030; ">,</span>    <span style="color:#696969; ">// Last rank, if an item is repeated</span></span>
+<span class="line_wrapper">    actual <span style="color:#808030; ">=</span> <span style="color:#008c00; ">4</span><span style="color:#808030; ">,</span>  <span style="color:#696969; ">// The actual rank of each item based on stable sort</span></span>
+<span class="line_wrapper"><span style="color:#800080; ">}</span><span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
         This policy determines how to calculate ranking for a vector of data that is sortable.<BR>
@@ -50,21 +61,22 @@ enum class rank_policy : unsigned char  {
 
   <BR>
 
-  <table align="center" border="1">
+  <table border="1">
 
     <tr bgcolor="lightblue">
       <th>Signature</th> <th>Description</th> <th>Parameters</th>
     </tr>
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>#include &lt;DataFrame/DataFrameStatsVisitors.h&gt;
-
-template&lt;typename T, typename I = unsigned long&gt;
-struct RankVisitor;
-        </B></PRE></font>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#004a43; ">#</span><span style="color:#004a43; ">include </span><span style="color:#800000; ">&lt;</span><span style="color:#40015a; ">DataFrame/DataFrameStatsVisitors.h</span><span style="color:#800000; ">&gt;</span></span>
+<span class="line_wrapper"></span>
+<span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; ">typename</span> T<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> I <span style="color:#808030; ">=</span> <span style="color:#800000; font-weight:bold; ">unsigned</span> <span style="color:#800000; font-weight:bold; ">long</span><span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         <span style="color:#666616; ">std</span><span style="color:#800080; ">::</span><span style="color:#603000; ">size_t</span> A <span style="color:#808030; ">=</span> <span style="color:#008c00; ">0</span><span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">struct</span> RankVisitor<span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
-        This is a “single action visitor”, meaning it is passed the whole data vector in one call and you must use the single_act_visit() interface.<BR><BR>
+        This is a "single action visitor", meaning it is passed the whole data vector in one call and you must use the single_act_visit() interface.<BR><BR>
         This functor class calculates ranks of the given vector of data. Please see rank_policy for more explanation.<BR>
         <I>
         <PRE>
@@ -73,15 +85,16 @@ struct RankVisitor;
         </PRE>
         </I>
       </td>
-      <td width="12%">
+      <td width="30%">
         <B>T</B>: Column data type.<BR>
-        <B>I</B>: Index type.
+        <B>I</B>: Index type.<BR>
+        <B>A</B>: Memory alignment boundary for vectors. Default is system default alignment<BR>
       </td>
     </tr>
 
   </table>
 
-<pre style='color:#000000;background:#ffffff;'><span style='color:#800000; font-weight:bold; '>static</span> <span style='color:#800000; font-weight:bold; '>void</span> test_RankVisitor<span style='color:#808030; '>(</span><span style='color:#808030; '>)</span>  <span style='color:#800080; '>{</span>
+<pre style='color:#000000;background:#ffffff00;'><span style='color:#800000; font-weight:bold; '>static</span> <span style='color:#800000; font-weight:bold; '>void</span> test_RankVisitor<span style='color:#808030; '>(</span><span style='color:#808030; '>)</span>  <span style='color:#800080; '>{</span>
 
     <span style='color:#666616; '>std</span><span style='color:#800080; '>::</span><span style='color:#603000; '>cout</span> <span style='color:#808030; '>&lt;</span><span style='color:#808030; '>&lt;</span> <span style='color:#800000; '>"</span><span style='color:#0f69ff; '>\n</span><span style='color:#0000e6; '>Testing RankVisitor{  } ...</span><span style='color:#800000; '>"</span> <span style='color:#808030; '>&lt;</span><span style='color:#808030; '>&lt;</span> <span style='color:#666616; '>std</span><span style='color:#800080; '>::</span><span style='color:#603000; '>endl</span><span style='color:#800080; '>;</span>
 
@@ -133,8 +146,8 @@ struct RankVisitor;
 </pre>
 <!--Created using ToHtml.com on 2020-06-18 18:58:47 UTC -->
 
-  <img src="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg?raw=true" alt="C++ DataFrame"
-       width="200" height="150" style="float:right"/>
+  <BR><img src="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg?raw=true" alt="C++ DataFrame"
+       width="200" height="200" style="float:right"/>
 
 </body>
 </html>

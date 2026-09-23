@@ -1,4 +1,4 @@
-<img src="LionLookingUp.jpg" alt="drawing" width="200"/>
+<img src="docs/LionLookingUp.jpg" alt="drawing" width="200"/>
 
 # Thank you for choosing to contribute to DataFrame
 
@@ -8,13 +8,13 @@
 * If you wrote a patch that fixes a bug
   * Open a new GitHub pull request with the patch.
   * Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
-  * Follow the same coding conventions and formatting already in DataFrame, as much as you can
+  * Follow the same coding conventions and formatting already in DataFrame.
 
 ### Do you intend to add a new feature or change an existing one?
 * Open an issue and mark it as **new feature** and clearly describe the new feature/enhancement.
 * Wait a few days for feedback.
 * Open a branch and implement your new addition/enhancement.
-* Follow the same coding conventions and formatting already in DataFrame, as much as you can
+* Follow the same coding conventions and formatting already in DataFrame.
 * write an **explicit and comprehensive** test for your new addition/enhancement.
 * Make sure your new addition/enhancement and the test compile and run correctly on all supported platforms
 * issue a pull request

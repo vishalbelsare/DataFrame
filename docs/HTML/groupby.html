@@ -1,6 +1,5 @@
-<h1></h1>
 <!--
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -25,25 +24,35 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
 <!DOCTYPE html>
 <html>
-<body>
-  <table align="center" border="1">
+
+<head>
+<style>
+body {
+  background-image: linear-gradient(Azure, AliceBlue, GhostWhite, WhiteSmoke);
+}
+</style>
+</head>
+
+<body style="font-family: Georgia, serif">
+  <font size="+3">&#8592;</font> <a href="https://hosseinmoein.github.io/DataFrame/docs/HTML/DataFrame.html">Back to Documentations</a><BR><BR>
+  
+  <table border="1">
 
     <tr bgcolor="lightblue">
         <th>Signature</th> <th>Description</th> <th>Parameters</th>
     </tr>
 
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-template&lt;typename T, typename I_V, typename ... Ts&gt;
-DataFrame
-groupby1(const char *col_name,
-         I_V &amp;&amp;idx_visitor,
-         Ts&amp;&amp; ... args) const; </font>
-        </B></PRE>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> I_V<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> Ts<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper">DataFrame</span>
+<span class="line_wrapper">groupby1<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         I_V <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span>idx_visitor<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         Ts<span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> args<span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">const</span><span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
-        This method groups the DataFrame by the named column of type T. The group-by’ing is done by equality. The comparison and equality operators must be well defined for type T. It returns a new DataFrame that has been group-by’ed.<BR>
+        This method groups the DataFrame by the named column of type T. The group-by'ing is done by equality. The comparison and equality operators must be well defined for type T. It returns a new DataFrame that has been group-by'ed.<BR>
         The summarization of columns is specified by a list of 3-member-tuples (triples) of the following format:<BR>
         <OL>
            <LI>Current DataFrame column name</LI>
@@ -65,17 +74,16 @@ groupby1(const char *col_name,
       </td>
     </tr>
 
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-template&lt;typename T1, typename T2, typename I_V,
-         typename ... Ts&gt;
-DataFrame
-groupby2(const char *col_name1,
-         const char *col_name2,
-         I_V &amp;&amp;idx_visitor,
-         Ts&amp;&amp; ... args) const; </font>
-        </B></PRE>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T1<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T2<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> I_V<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         <span style="color:#800000; font-weight:bold; ">typename</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> Ts<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper">DataFrame</span>
+<span class="line_wrapper">groupby2<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name1<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         <span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name2<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         I_V <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span>idx_visitor<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         Ts<span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> args<span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">const</span><span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
         This is the same as above groupby1() but it groups by two columns<BR>
@@ -92,18 +100,17 @@ groupby2(const char *col_name1,
     </tr>
 
 
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-template&lt;typename T1, typename T2, typename T3,
-         typename I_V, typename ... Ts&gt;
-DataFrame
-groupby3(const char *col_name1,
-         const char *col_name2,
-         const char *col_name3,
-         I_V &amp;&amp;idx_visitor,
-         Ts&amp;&amp; ... args) const; </font>
-        </B></PRE>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T1<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T2<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T3<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         <span style="color:#800000; font-weight:bold; ">typename</span> I_V<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> Ts<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper">DataFrame</span>
+<span class="line_wrapper">groupby3<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name1<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         <span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name2<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         <span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name3<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         I_V <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span>idx_visitor<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         Ts<span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> args<span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">const</span><span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
         This is the same as above groupby2() but it groups by three columns<BR>
@@ -121,15 +128,14 @@ groupby3(const char *col_name1,
       </td>
     </tr>
 
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-template&lt;typename T, typename I_V, typename ... Ts&gt;
-std::future&lt;DataFrame&gt;
-groupby1_async(const char *col_name,
-               I_V &amp;&amp;idx_visitor,
-               Ts&amp;&amp; ... args) const; </font>
-        </B></PRE>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> I_V<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> Ts<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper"><span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>future<span style="color:#800080; ">&lt;</span>DataFrame<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper">groupby1_async<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">               I_V <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span>idx_visitor<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">               Ts<span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> args<span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">const</span><span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
         Same as groupby1() above, but executed asynchronously
@@ -138,17 +144,16 @@ groupby1_async(const char *col_name,
       </td>
     </tr>
 
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-template&lt;typename T1, typename T2, typename I_V,
-         typename ... Ts&gt;
-std::future&lt;DataFrame&gt;
-groupby2_async(const char *col_name1,
-               const char *col_name2,
-               I_V &amp;&amp;idx_visitor,
-               Ts&amp;&amp; ... args) const; </font>
-        </B></PRE>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T1<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T2<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> I_V<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         <span style="color:#800000; font-weight:bold; ">typename</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> Ts<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper"><span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>future<span style="color:#800080; ">&lt;</span>DataFrame<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper">groupby2_async<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name1<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">               <span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name2<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">               I_V <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span>idx_visitor<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">               Ts<span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> args<span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">const</span><span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
         Same as groupby2() above, but executed asynchronously
@@ -157,18 +162,17 @@ groupby2_async(const char *col_name1,
       </td>
     </tr>
 
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-template&lt;typename T1, typename T2, typename T3,
-         typename I_V, typename ... Ts&gt;
-std::future&lt;DataFrame&gt;
-groupby3_async(const char *col_name1,
-               const char *col_name2,
-               const char *col_name3,
-               I_V &amp;&amp;idx_visitor,
-               Ts&amp;&amp; ... args) const; </font>
-        </B></PRE>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T1<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T2<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; "><a href="https://github.com/hosseinmoein/DataFrame/blob/master/include/DataFrame/Utils/Concepts.h#L66">comparable</a></span> T3<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">         <span style="color:#800000; font-weight:bold; ">typename</span> I_V<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> Ts<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper"><span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>future<span style="color:#800080; ">&lt;</span>DataFrame<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper">groupby3_async<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name1<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">               <span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name2<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">               <span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>col_name3<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">               I_V <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span>idx_visitor<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">               Ts<span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> args<span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">const</span><span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
         Same as groupby3() above, but executed asynchronously
@@ -179,7 +183,7 @@ groupby3_async(const char *col_name1,
 
   </table>
 
-<pre style='color:#000000;background:#ffffff;'><span style='color:#800000; font-weight:bold; '>static</span> <span style='color:#800000; font-weight:bold; '>void</span> test_groupby<span style='color:#808030; '>(</span><span style='color:#808030; '>)</span>  <span style='color:#800080; '>{</span>
+<pre style='color:#000000;background:#ffffff00;'><span style='color:#800000; font-weight:bold; '>static</span> <span style='color:#800000; font-weight:bold; '>void</span> test_groupby<span style='color:#808030; '>(</span><span style='color:#808030; '>)</span>  <span style='color:#800080; '>{</span>
 
     <span style='color:#666616; '>std</span><span style='color:#800080; '>::</span><span style='color:#603000; '>cout</span> <span style='color:#808030; '>&lt;</span><span style='color:#808030; '>&lt;</span> <span style='color:#800000; '>"</span><span style='color:#0f69ff; '>\n</span><span style='color:#0000e6; '>Testing groupby( ) ...</span><span style='color:#800000; '>"</span> <span style='color:#808030; '>&lt;</span><span style='color:#808030; '>&lt;</span> <span style='color:#666616; '>std</span><span style='color:#800080; '>::</span><span style='color:#603000; '>endl</span><span style='color:#800080; '>;</span>
 
@@ -327,7 +331,7 @@ groupby3_async(const char *col_name1,
 </pre>
 <!--Created using ToHtml.com on 2021-04-07 17:23:00 UTC -->
 
-<pre style='color:#000000;background:#ffffff;'>
+<pre style='color:#000000;background:#ffffff00;'>
 <span style='color:#696969; '>// -----------------------------------------------------------------------------</span>
 
 <span style='color:#800000; font-weight:bold; '>static</span> <span style='color:#800000; font-weight:bold; '>void</span> test_groupby_3<span style='color:#808030; '>(</span><span style='color:#808030; '>)</span>  <span style='color:#800080; '>{</span>
@@ -374,8 +378,8 @@ groupby3_async(const char *col_name1,
 </pre>
 <!--Created using ToHtml.com on 2021-04-16 16:35:11 UTC -->
 
-  <img src="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg?raw=true" alt="C++ DataFrame"
-       width="200" height="150" style="float:right"/>
+  <BR><img src="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg?raw=true" alt="C++ DataFrame"
+       width="200" height="200" style="float:right"/>
 
 </body>
 </html>

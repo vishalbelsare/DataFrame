@@ -1,7 +1,7 @@
 // Hossein Moein
 // October 16 2020
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -33,17 +33,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <array>
 #include <functional>
 #include <iterator>
+#include <utility>
 #include <vector>
-
-#if defined(_WIN32) && defined(HMDF_SHARED)
-#  ifdef LIBRARY_EXPORTS
-#    define LIBRARY_API __declspec(dllexport)
-#  else
-#    define LIBRARY_API __declspec(dllimport)
-#  endif // LIBRARY_EXPORTS
-#else
-#  define LIBRARY_API
-#endif // _WIN32
 
 // ----------------------------------------------------------------------------
 
@@ -53,7 +44,7 @@ namespace hmdf
 // Fixed size priority queue. By default, it is a max heap
 //
 template <typename T, std::size_t N, typename Cmp = std::less<T>>
-class LIBRARY_API   FixedSizePriorityQueue  {
+class FixedSizePriorityQueue  {
 
     using container_type = std::array<T, N>;
     using iterator = typename container_type::iterator;
@@ -72,30 +63,35 @@ public:
             std::push_heap(array_.begin(), data_end_, cmp_);
         }
         else  {
-            std::sort_heap(array_.begin(), array_.end(), cmp_);
-            if (cmp_(array_.front(), item))
-                array_[0] = std::move(item);
-            std::make_heap(array_.begin(), array_.end(), cmp_);
+            auto const  min_iter {
+                std::min_element(array_.begin(), array_.end(), cmp_)
+            };
+
+            if (cmp_(*min_iter, item))  {
+                *min_iter = std::move(item);
+                std::make_heap(array_.begin(), array_.end(), cmp_);
+            }
         }
     }
 
-    inline const value_type &top() const noexcept  { return (array_.front()); }
+    [[nodiscard]] inline const value_type
+    &top() const noexcept  { return (array_.front()); }
     inline void pop()  {
 
         if (! empty())
             std::pop_heap(array_.begin(), data_end_--, cmp_);
     }
 
-    inline size_type size() const noexcept {
+    [[nodiscard]] inline size_type size() const noexcept {
 
         return (std::distance(array_.begin(),
                               static_cast<const_iterator>(data_end_)));
     }
-    inline bool empty() const noexcept  { return (size() == 0); }
+    [[nodiscard]] inline bool empty() const noexcept  { return (size() == 0); }
 
     inline void clear()  { data_end_ = array_.begin(); }
 
-    inline std::vector<value_type> data() const  {
+    [[nodiscard]] inline std::vector<value_type> data() const  {
 
         std::vector<value_type> result;
 

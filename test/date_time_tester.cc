@@ -1,7 +1,7 @@
 // Hossein Moein
 // March 18, 2018
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -38,50 +38,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 using namespace hmdf;
 
-// ----------------------------------------------------------------------------
+using date_t = DateTime::DateType;
 
-static void test_priority_queue()  {
-
-    FixedSizePriorityQueue<double, 5>   q;
-
-    q.push(3);
-    assert(q.top() == 3);
-    assert(q.size() == 1);
-    assert((q.data() == std::vector<double> { 3 }));
-    q.push(7);
-    assert(q.top() == 7);
-    assert(q.size() == 2);
-    assert((q.data() == std::vector<double> { 3, 7 }));
-    q.push(5);
-    assert(q.top() == 7);
-    assert(q.size() == 3);
-    assert((q.data() == std::vector<double> { 3, 5, 7 }));
-
-    q.push(10);
-    q.push(12);
-    q.push(15);
-    assert(q.top() == 15);
-    assert(q.size() == 5);
-    assert((q.data() == std::vector<double> { 5, 7, 10, 12, 15 }));
-
-    q.pop();
-    assert(q.top() == 12);
-    assert(q.size() == 4);
-    assert((q.data() == std::vector<double> { 5, 7, 10, 12 }));
-    q.pop();
-    assert(q.top() == 10);
-    assert(q.size() == 3);
-    assert((q.data() == std::vector<double> { 5, 7, 10 }));
-    q.pop();
-    q.pop();
-    q.pop();
-    q.pop();
-    q.pop();
-    q.pop();
-    assert(q.size() == 0);
-    assert(q.empty());
-    assert((q.data() == std::vector<double> {  }));
-}
+static void test_priority_queue();
 
 // ----------------------------------------------------------------------------
 
@@ -101,27 +60,28 @@ int main (int, char *[])  {
     cout << "Local Time is: " << now.string_format (DT_FORMAT::ISO_DT) << endl;
     cout << "Local Time is: " << now.string_format (DT_FORMAT::ISO_DT_TM)
          << endl;
+    cout.precision(20);
+    cout << "Local now as double is: " << double(now) << endl;
 
     now = 19721202;
     assert(now.string_format(DT_FORMAT::DT_TM2) == "12/02/1972 00:00:00.000");
-    now = "19910223 16:23:45.230";
+    now = "19910223 16:23:45.230 LOC";
     assert(now.string_format(DT_FORMAT::DT_TM2) == "02/23/1991 16:23:45.230");
     now = "19910223 16:23:45.230";
     assert(now.string_format(DT_FORMAT::DT_TM2) == "02/23/1991 16:23:45.230");
     now = "20100207 12";
     assert(now.string_format(DT_FORMAT::DT_TM2) == "02/07/2010 12:00:00.000");
-    now = "20100207 12:32";
+    now = "20100207 12:32 THR";
     assert(now.string_format(DT_FORMAT::DT_TM2) == "02/07/2010 12:32:00.000");
     now = "20100207 12:32:12";
 
     try  {
-        now.diff_seconds (gmnow);
+        const auto  diff = now.diff_seconds (gmnow);
 
-        assert(false);
+        std::cout << "The diff is: " << diff << std::endl;
     }
-    catch (const std::runtime_error &)  {
-        // cout << ex.what();
-        ; // Time diff between different timezones is not implemented
+    catch (const std::runtime_error &ex)  {
+        cout << ex.what();
     }
 
     {
@@ -215,7 +175,7 @@ int main (int, char *[])  {
                                  gmt_now.minute (), gmt_now.sec (),
                                  gmt_now.msec (), DT_TIME_ZONE::GMT);
 
-        DateTime    local_time_1970 (19700101);
+        DateTime    local_time_1970 (date_t(19700101));
         DateTime    gmt_time_1970 (19700101, 0, 0, 0, 0, DT_TIME_ZONE::GMT);
 
         DateTime    local_time_1989 (19891214, 20, 15, 23, 0);
@@ -699,66 +659,43 @@ int main (int, char *[])  {
     {
         // Testing DateTime's const char * constructor
 
-        const DateTime  dt1 ("20100207 12:31");
+        const DateTime  dt1 ("20100207 12:31 GMT");
 
-        if (dt1.string_format (DT_FORMAT::DT_TM2) !=
-                "02/07/2010 12:31:00.000")  {
-            std::cout << "ERROR: "
-                      << dt1.string_format (DT_FORMAT::DT_TM2) << " != "
-                      << "02/07/2010 12:31:00.000" << std::endl;
-            return (EXIT_FAILURE);
-        }
+        assert(dt1.string_format (DT_FORMAT::DT_TM2) ==
+                   "02/07/2010 12:31:00.000");
 
-        const DateTime  dt2 ("02/08/2010 12:31:56", DT_DATE_STYLE::AME_STYLE);
+        const DateTime  dt2 ("02/08/2010 12:31:56 LOC",
+                             DT_DATE_STYLE::AME_STYLE);
 
-        if (dt2.string_format (DT_FORMAT::DT_TM2) !=
-                "02/08/2010 12:31:56.000")  {
-            std::cout << "ERROR: "
-                      << dt2.string_format (DT_FORMAT::DT_TM2) << " != "
-                      << "02/08/2010 12:31:56.000" << std::endl;
-            return (EXIT_FAILURE);
-        }
+        assert(dt2.string_format (DT_FORMAT::DT_TM2) ==
+                   "02/08/2010 12:31:56.000");
 
         const DateTime  dt3 ("2010/02/09 12:31:56", DT_DATE_STYLE::EUR_STYLE);
 
-        if (dt3.string_format (DT_FORMAT::DT_TM2) !=
-                "02/09/2010 12:31:56.000")  {
-            std::cout << "ERROR: "
-                      << dt3.string_format (DT_FORMAT::DT_TM2) << " != "
-                      << "02/09/2010 12:31:56.000" << std::endl;
-            return (EXIT_FAILURE);
-        }
+        assert(dt3.string_format (DT_FORMAT::DT_TM2) ==
+                   "02/09/2010 12:31:56.000");
 
-        const DateTime  dt4 ("  2010/02/10 12:31:56", DT_DATE_STYLE::EUR_STYLE);
+        const DateTime  dt4 ("  2010/02/10 12:31:56 STO",
+                             DT_DATE_STYLE::EUR_STYLE);
 
-        if (dt4.string_format (DT_FORMAT::DT_TM2) !=
-                "02/10/2010 12:31:56.000")  {
-            std::cout << "ERROR: "
-                      << dt4.string_format (DT_FORMAT::DT_TM2) << " != "
-                      << "02/10/2010 12:31:56.000" << std::endl;
-            return (EXIT_FAILURE);
-        }
+        assert(dt4.string_format (DT_FORMAT::DT_TM2) ==
+                   "02/10/2010 12:31:56.000");
 
-        const DateTime  dt5 ("    02/11/2010 12:31:56",
-                             DT_DATE_STYLE::AME_STYLE);
+        const DateTime  paris("    02/11/2010 12:31:56 PAR",
+                              DT_DATE_STYLE::AME_STYLE);
+        const DateTime  tehran("    02/11/2010 12:31:56 THR",
+                               DT_DATE_STYLE::AME_STYLE);
 
-        if (dt5.string_format (DT_FORMAT::DT_TM2) !=
-                "02/11/2010 12:31:56.000")  {
-            std::cout << "ERROR: "
-                      << dt5.string_format (DT_FORMAT::DT_TM2) << " != "
-                      << "02/11/2010 12:31:56.000" << std::endl;
-            return (EXIT_FAILURE);
-        }
+        assert(paris.string_format (DT_FORMAT::DT_TM2) ==
+                   "02/11/2010 12:31:56.000");
+        // Tehran must be 2.5 hours ahead of Paris
+        //
+        assert(((paris.time() - tehran.time()) == 9000));
 
         const DateTime dt6 (20190110, 13, 56, 23, 123456987);
 
-        if (dt6.string_format (DT_FORMAT::DT_PRECISE) !=
-                "1547146583.123456987")  {
-            std::cout << "ERROR: "
-                      << dt6.string_format (DT_FORMAT::DT_PRECISE) << " != "
-                      << "1547146583.123456987" << std::endl;
-            // return (EXIT_FAILURE);
-        }
+        assert(dt6.string_format (DT_FORMAT::DT_PRECISE) ==
+                   "1547146583.123456987");
     }
 
     {
@@ -909,7 +846,7 @@ int main (int, char *[])  {
     }
 
     {
-        DateTime    dt("2015/01/05 09:40:00", hmdf::DT_DATE_STYLE::EUR_STYLE);
+        DateTime    dt("2015/01/05 09:40:00", DT_DATE_STYLE::EUR_STYLE);
         DateTime    dt2;
 
         dt2 = "20150105 09:40:00";
@@ -917,19 +854,151 @@ int main (int, char *[])  {
     }
 
     {
-        DateTime    dt("2015/01/05 09:40:30", hmdf::DT_DATE_STYLE::EUR_STYLE);
-        DateTime    dt2("2015-01-05 09:40:30", hmdf::DT_DATE_STYLE::ISO_STYLE);
-        DateTime    dt3("2015/01/05 09:40:30.123",
-                       hmdf::DT_DATE_STYLE::EUR_STYLE);
-        DateTime    dt4("2015-01-05 09:40:30.123",
-                       hmdf::DT_DATE_STYLE::ISO_STYLE);
+        DateTime    dt("2015/01/05 09:40:30", DT_DATE_STYLE::EUR_STYLE);
+        DateTime    dt2("2015-01-05 09:40:30", DT_DATE_STYLE::ISO_STYLE);
+        DateTime    dt3("2015/01/05 09:40:30.123", DT_DATE_STYLE::EUR_STYLE);
+        DateTime    dt4("2015-01-05 09:40:30.123", DT_DATE_STYLE::ISO_STYLE);
 
         assert(dt == dt2);
         assert(dt3 == dt4);
     }
 
+    {
+        std::cout << "Testing arithmetic operators ..." << std::endl;
+
+        const DateTime  dt("2015/01/05 09:40:30", DT_DATE_STYLE::EUR_STYLE);
+        const DateTime  now3;
+
+        std::cout << "+ operator: " << dt + now3 << std::endl;
+        std::cout << "- operator: " << dt - now3 << std::endl;
+        std::cout << "* operator: " << dt * now3 << std::endl;
+        std::cout << "/ operator: " << dt / now3 << std::endl;
+
+        std::cout << "DateTime vs. double +:" << std::endl;
+        std::cout << "Original DateTime: " << double(dt) << std::endl;
+        std::cout << "+ operator: " << dt + 0.0001 << std::endl;
+        std::cout << "- operator: " << dt - 1.0 << std::endl;
+        std::cout << "* operator: " << dt * 1.0 << std::endl;
+        std::cout << "/ operator: " << dt / 2.0 << std::endl;
+
+        std::cout << "double vs. DateTime +:" << std::endl;
+        std::cout << "Original DateTime: " << double(dt) << std::endl;
+        std::cout << "+ operator: " << 0.0001 + dt << std::endl;
+        std::cout << "- operator: " << 1.0 - dt << std::endl;
+        std::cout << "* operator: " << 1.0 * dt << std::endl;
+        std::cout << "/ operator: " << 1400000009.0 / dt << std::endl;
+
+        DateTime    dt2("2015/01/05 09:40:30", DT_DATE_STYLE::EUR_STYLE);
+
+        std::cout << "DateTime vs. double +=:" << std::endl;
+        std::cout << "Original DateTime: " << double(dt2) << std::endl;
+        dt2 += 0.0001;
+        std::cout << "+= operator: " << double(dt2) << std::endl;
+        dt2 -= 1.0001;
+        std::cout << "-= operator: " << double(dt2) << std::endl;
+        dt2 *= 2.0;
+        std::cout << "*= operator: " << double(dt2) << std::endl;
+        dt2 /= 2.0;
+        std::cout << "/= operator: " << double(dt2) << std::endl;
+    }
+
+    {
+        std::cout << "Testing ISO format parsing ..." << std::endl;
+
+        const DateTime  dt1("2018-12-21 13:07:35", DT_DATE_STYLE::ISO_STYLE);
+
+        std::cout << "2018-12-21 13:07:35 == "
+                  << dt1.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
+
+        const DateTime  dt2("2018-12-21 13:07:35.5", DT_DATE_STYLE::ISO_STYLE);
+
+        std::cout << "2018-12-21 13:07:35.5 == "
+                  << dt2.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
+
+        const DateTime  dt3("2018-12-21 13:07:35.55", DT_DATE_STYLE::ISO_STYLE);
+
+        std::cout << "2018-12-21 13:07:35.55 == "
+                  << dt3.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
+
+        const DateTime  dt4("2018-12-21 13:07:35.555",
+                            DT_DATE_STYLE::ISO_STYLE);
+
+        std::cout << "2018-12-21 13:07:35.555 == "
+                  << dt4.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
+
+        const DateTime  dt5("2018-12-21 13:07:35.882764",
+                            DT_DATE_STYLE::ISO_STYLE);
+
+        std::cout << "2018-12-21 13:07:35.882764 == "
+                  << dt5.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
+
+        const DateTime  dt6("2018-12-21 13:07:35.882764+00",
+                            DT_DATE_STYLE::ISO_STYLE);
+
+        std::cout << "2018-12-21 13:07:35.882764+00 == "
+                  << dt6.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
+
+        const DateTime  dt7("2018-12-21 13:07:35+00", DT_DATE_STYLE::ISO_STYLE);
+
+        std::cout << "2018-12-21 13:07:35+00 == "
+                  << dt7.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
+
+        const DateTime  dt8("2018-12-21 13:07:35.123456789+00",
+                            DT_DATE_STYLE::ISO_STYLE);
+        std::string     result;
+
+        dt8.date_to_str (DT_FORMAT::ISO_DT_NANO, result);
+        std::cout << "2018-12-21 13:07:35.123456789+00 == " << result
+                  << std::endl;
+    }
+
     test_priority_queue();
     return (EXIT_SUCCESS);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_priority_queue()  {
+
+    FixedSizePriorityQueue<double, 5>   q;
+
+    q.push(3);
+    assert(q.top() == 3);
+    assert(q.size() == 1);
+    assert((q.data() == std::vector<double> { 3 }));
+    q.push(7);
+    assert(q.top() == 7);
+    assert(q.size() == 2);
+    assert((q.data() == std::vector<double> { 3, 7 }));
+    q.push(5);
+    assert(q.top() == 7);
+    assert(q.size() == 3);
+    assert((q.data() == std::vector<double> { 3, 5, 7 }));
+
+    q.push(10);
+    q.push(12);
+    q.push(15);
+    assert(q.top() == 15);
+    assert(q.size() == 5);
+    assert((q.data() == std::vector<double> { 5, 7, 10, 12, 15 }));
+
+    q.pop();
+    assert(q.top() == 12);
+    assert(q.size() == 4);
+    assert((q.data() == std::vector<double> { 5, 7, 10, 12 }));
+    q.pop();
+    assert(q.top() == 10);
+    assert(q.size() == 3);
+    assert((q.data() == std::vector<double> { 5, 7, 10 }));
+    q.pop();
+    q.pop();
+    q.pop();
+    q.pop();
+    q.pop();
+    q.pop();
+    assert(q.size() == 0);
+    assert(q.empty());
+    assert((q.data() == std::vector<double> {  }));
 }
 
 // ----------------------------------------------------------------------------

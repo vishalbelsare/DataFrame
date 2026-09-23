@@ -1,7 +1,7 @@
 // Hossein Moein
 // July 16, 2019
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,102 +30,121 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <DataFrame/Vectors/HeteroVector.h>
+#include <DataFrame/Utils/Concepts.h>
+#include <DataFrame/Utils/FixedSizeString.h>
+#include <DataFrame/Utils/DateTime.h>
+#include <DataFrame/Utils/MetaProg.h>
 
-#include <cmath>
 #include <complex>
 #include <limits>
+#include <memory>
+#include <random>
 #include <stdexcept>
 #include <tuple>
-#include <type_traits>
+#include <utility>
+#include <vector>
 
 // ----------------------------------------------------------------------------
 
 namespace hmdf
 {
 
-#if defined(_WIN32) || defined(_WIN64)
-#  ifdef min
-#    undef min
-#  endif // min
-#  ifdef max
-#    undef max
-#  endif // max
-#endif // _WIN32 || _WIN64
-
 // ----------------------------------------------------------------------------
 
 // Generic DataFrame error
 //
-struct DataFrameError : public std::runtime_error  {
+struct  DataFrameError : public std::runtime_error  {
 
+    explicit
     DataFrameError (const char *desc) : std::runtime_error (desc)  {   }
 };
 
 // Column does not exist error
 //
-struct ColNotFound : public DataFrameError  {
+struct  ColNotFound : public DataFrameError  {
 
+    explicit
     ColNotFound (const char *desc) : DataFrameError (desc)  {   }
 };
 
 // Something in DataFrame/operation is not proper error. For example, trying
 // to load a column with more data than there is in index
 //
-struct InconsistentData : public DataFrameError  {
+struct  InconsistentData : public DataFrameError  {
 
+    explicit
     InconsistentData (const char *desc) : DataFrameError (desc)  {   }
 };
 
 // Bad data range specification error
 //
-struct BadRange : public DataFrameError  {
+struct  BadRange : public DataFrameError  {
 
+    explicit
     BadRange (const char *desc) : DataFrameError (desc)  {   }
 };
 
 // The operation is not feasible error. For example, trying to do interpolation
 // on non-arithmetic types
 //
-struct NotFeasible : public DataFrameError  {
+struct  NotFeasible : public DataFrameError  {
 
+    explicit
     NotFeasible (const char *desc) : DataFrameError (desc)  {   }
+};
+
+// An I/O operation could not be done. For example, trying to open a file
+// that doesn't exist.
+//
+struct  BadIO : public DataFrameError  {
+
+    explicit
+    BadIO (const char *desc) : DataFrameError (desc)  {   }
 };
 
 // The functionality is not implemented error
 //
-struct NotImplemented : public DataFrameError  {
+struct  NotImplemented : public DataFrameError  {
 
+    explicit
     NotImplemented (const char *desc) : DataFrameError (desc)  {   }
 };
 
 // ----------------------------------------------------------------------------
 
-inline constexpr const char *DF_INDEX_COL_NAME = "INDEX";
+inline constexpr const char     *DF_INDEX_COL_NAME = "INDEX";
+inline constexpr std::size_t    MAX_COL_NAME_SIZE = 64;
 
 // ----------------------------------------------------------------------------
 
-enum class nan_policy : bool  {
+enum class  nan_policy : bool  {
+
     pad_with_nans = true,
     dont_pad_with_nans = false,
 };
 
 // ----------------------------------------------------------------------------
 
-enum class sort_state : bool  {
+enum class  sort_state : bool  {
+
     sorted = true,
     not_sorted = false,
 };
 
 // ----------------------------------------------------------------------------
 
-enum class sort_spec : unsigned char  {
+enum class  sort_spec : unsigned char  {
+
     ascen = 1,
     desce = 2,
+    abs_ascen = 3,
+    abs_desce = 4,
 };
 
 // ----------------------------------------------------------------------------
 
-enum class join_policy : unsigned char  {
+enum class  join_policy : unsigned char  {
+
     inner_join = 1,
     left_join = 2,
     right_join = 3,
@@ -134,7 +153,44 @@ enum class join_policy : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class concat_policy : unsigned char  {
+enum class  gen_join_type : unsigned char  {
+
+    no_match = 1,
+    include_left = 2,
+    include_right = 3,
+    include_both = 4,
+};
+
+// ----------------------------------------------------------------------------
+
+// Policy for asof_join(): controls how each lhs value is matched to the
+// nearest rhs value when an exact match does not exist.
+//
+enum class  asof_policy : unsigned char  {
+
+    // Default:
+    // For each lhs value, find the greatest rhs value that is <= lhs value.
+    // This is the classic "last known value" lookup used in time series work
+    // (align trade prices to the most recent quote available at that time).
+    //
+    backward = 1,
+
+    // For each lhs value, find the smallest rhs value that is >= lhs value.
+    // Useful for "next event" lookups (e.g. next scheduled earnings date).
+    //
+    forward  = 2,
+
+    // For each lhs value, find the rhs value whose absolute distance to the
+    // lhs value is smallest. Ties are broken in favour of backward (i.e. the
+    // earlier rhs row).
+    //
+    nearest  = 3,
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  concat_policy : unsigned char  {
+
     common_columns = 1,
     all_columns = 2,
     lhs_and_common_columns = 3,
@@ -142,9 +198,32 @@ enum class concat_policy : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
+// Controls whether and how crosstab() normalises the count matrix.
+//
+enum class  crosstab_norm_policy : unsigned char  {
+
+    none = 1,  // Return raw integer counts.
+
+    // Divide every cell by the grand total so every cell is a fraction in
+    // [0, 1] and all cells sum to 1.
+    //
+    all = 2,
+
+    // Divide each cell by its row total. Each row therefore sums to 1.
+    //
+    row = 3,
+
+    // Divide each cell by its column total. Each column therefore sums to 1.
+    //
+    column = 4,
+};
+
+// ----------------------------------------------------------------------------
+
 // This policy is relative to a tabular data structure
 //
-enum class shift_policy : unsigned char  {
+enum class  shift_policy : unsigned char  {
+
     // Shift/rotate the content of all columns down, keep index unchanged
     //
     down = 1,
@@ -161,7 +240,7 @@ enum class shift_policy : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class fill_policy : unsigned char  {
+enum class  fill_policy : unsigned char  {
 
     // Fill all missing values with the given substitute
     //
@@ -180,16 +259,38 @@ enum class fill_policy : unsigned char  {
     //           X2 - X1
     //
     linear_interpolate = 4,  // Using the index as X coordinate
-    linear_extrapolate = 5,  // Using the index as X coordinate
 
     // Fill missing values with mid-point of surrounding values
     //
-    mid_point = 6,
+    mid_point = 5,
+
+    // O(n2) algorithm for each missing value.
+    // It uses the index as X coordinate
+    // This is very much a garbage in, garbage out algorithm.
+    // The index and column data must be in the same scale and be correlated.
+    //
+    lagrange_interpolate = 6,
 };
 
 // ----------------------------------------------------------------------------
 
-enum class quantile_policy : unsigned char  {
+enum class  roll_policy : unsigned char  {
+
+    // Roll one block of data at a time
+    // The length of result will be "input length / rolling period"
+    //
+    blocks = 1,
+
+    // Roll one data point at a time
+    // The length of result will be "input length - rolling period"
+    //
+    continuous = 2,
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  quantile_policy : unsigned char  {
+
     lower_value = 1,   // Take the higher index
     higher_value = 2,  // Take the lower index
     mid_point = 3,     // Average the two quantiles
@@ -198,7 +299,8 @@ enum class quantile_policy : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class drop_policy : unsigned char  {
+enum class  drop_policy : unsigned char  {
+
     all = 1,       // Remove row if all columns are nan
     any = 2,       // Remove row if any column is nan
     threshold = 3, // Remove row if threshold number of columns are nan
@@ -206,7 +308,7 @@ enum class drop_policy : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class mean_type : unsigned char  {
+enum class  mean_type : unsigned char  {
 
     arithmetic = 1, // sum(value) / count
     weighted = 2,   // sum(weighted value) / ((count * (count + 1)) / 2)
@@ -217,14 +319,28 @@ enum class mean_type : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class hampel_type : unsigned char  {
+enum class  correlation_type : unsigned char  {
+
+    pearson = 1,      // ρ =  COV(X, Y) / (σ(X) * σ(Y))
+
+    // Non-parametric (rank-based) correlations
+    //
+    spearman = 2,     // ρ = 1 - ((6 * SUM(di^2)) / (n * (n^2 - 1)))
+    kendall_tau = 3,  // ρ = (C - D) / ((n * (n - 1)) / 2)
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  hampel_type : unsigned char  {
+
     mean = 1,   // Use mean absolute deviation
     median = 2, // Use median absolute deviation
 };
 
 // ----------------------------------------------------------------------------
 
-enum class remove_dup_spec : unsigned char  {
+enum class  remove_dup_spec : unsigned char  {
+
     keep_first = 1,  // Keep the first duplicated row
     keep_last = 2,   // Keep the last duplicated row
     keep_none = 3,   // Discard all duplicated rows
@@ -232,7 +348,8 @@ enum class remove_dup_spec : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class exponential_decay_spec : unsigned char  {
+enum class  exponential_decay_spec : unsigned char  {
+
     center_of_gravity = 1, // decay = 1 / (1 + value), for value >= 0
     span = 2,              // decay = 2 / (1 + value), for value >= 1
     halflife = 3,          // decay = 1 − exp(log(0.5) / value), for value > 0
@@ -244,7 +361,8 @@ enum class exponential_decay_spec : unsigned char  {
 // It defines different ways of calculating averages around averages,
 // in other words different types of Mean Absolute Deviation.
 //
-enum class mad_type : unsigned char  {
+enum class  mad_type : unsigned char  {
+
     mean_abs_dev_around_mean = 1,
     mean_abs_dev_around_median = 2,
     median_abs_dev_around_mean = 3,
@@ -253,17 +371,30 @@ enum class mad_type : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class io_format : unsigned char  {
-    csv = 1,   // DataFrame specific csv format
-    csv2 = 2,  // Regular csv format (similar to Pandas)
+enum class  io_format : unsigned char  {
+
+    csv = 1,     // DataFrame specific csv format
+    csv2 = 2,    // Regular csv format (similar to Pandas)
     json = 3,
-    hdf5 = 4,
-    binary = 5,
+    binary = 5,  // DataFrame specific binary format
+
+    // These only apply to write (output) function. They are somewhat resource
+    // consuming operations, especially for large datasets.
+    // NOTE: Currently, special characters for these types are not escaped. So
+    //       you better not have special chars.
+    //       pretty_prt doesn't have any special characters.
+    //
+    pretty_prt = 6,
+    markdown = 7,
+    latex = 8,
+    html = 9,
 };
 
 // ----------------------------------------------------------------------------
 
-enum class time_frequency : unsigned char  {
+enum class  time_frequency : unsigned char  {
+
+    not_valid = 0,
     annual = 1,
     monthly = 2,
     weekly = 3,
@@ -278,22 +409,24 @@ enum class time_frequency : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class return_policy : unsigned char  {
+enum class  return_policy : unsigned char  {
+
     log = 1,         // log(t1 / t0)
     percentage = 2,  // (t1 - t0) / t0
     monetary = 3,    // t1 - t0
-    trinary = 4,     // 1 if t1 - t0 > 0, -1 if t1 - t0 < 0, else 0
+    trinary = 4,     // 1 if t1 - t0 > 0, else -1 if t1 - t0 < 0, else 0
 };
 
 // ----------------------------------------------------------------------------
 
 // Specification for calling get_[data|view]_by_rand()
-// Number of rows means the n parameter is an positive integer specifying
+// Number of rows means the n parameter is a positive integer specifying
 // the number of rows to select
 // Fraction of rows means the n parameter is a positive real number [0:1]
 // specifying a fraction of rows to select
 //
-enum class random_policy : unsigned char  {
+enum class  random_policy : unsigned char  {
+
     num_rows_with_seed = 1,  // Number of rows with specifying a seed
     num_rows_no_seed = 2,    // Number of rows with no seed specification
     frac_rows_with_seed = 3, // Fraction of rows with specifying a seed
@@ -302,7 +435,8 @@ enum class random_policy : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class pattern_spec : unsigned char  {
+enum class  pattern_spec : unsigned char  {
+
     monotonic_increasing = 1,           // i >= j
     strictly_monotonic_increasing = 2,  // i > j
     monotonic_decreasing = 3,           // i <= j
@@ -317,7 +451,8 @@ enum class pattern_spec : unsigned char  {
 // Specification for RankVisitor
 // This specifies how to assign ranks to members of a column
 //
-enum class rank_policy : unsigned char  {
+enum class  rank_policy : unsigned char  {
+
     average = 1,  // Average of ranks, if an item is repeated
     first = 2,    // First rank, if an item is repeated
     last = 3,     // Last rank, if an item is repeated
@@ -328,7 +463,8 @@ enum class rank_policy : unsigned char  {
 
 // Different types of Sigmoid functions. For now, there is no integration
 //
-enum class sigmoid_type : unsigned char  {
+enum class  sigmoid_type : unsigned char  {
+
     logistic = 1,        // f(x) = 1 / (1 + exp(-x))
     algebraic = 2,       // f(x) = 1 / sqrt(1 + pow(x, 2.0))
     // f(x) = [(exp(x) - exp(-x)) / (exp(x) + exp(-x))] = tanh(x)
@@ -338,6 +474,51 @@ enum class sigmoid_type : unsigned char  {
     gudermannian = 6,    // f(x) = atan(sinh(x))
     // f(x) = 0 if x <= 0, 1 if x >= 1 else 3pow(x, 2) - 2pow(x, 3)
     smoothstep = 7,
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  rectify_type : unsigned char  {
+
+    ReLU = 1,           // f(x) = x if x > 0 else 0
+    param_ReLU = 2,     // f(x) = x if x > 0 else a * x,          a <= 1
+    GeLU = 3,           // f(x) = x * SND(x),       SND = Standard Normal Dist
+    SiLU = 4,           // f(x) = x * Sigmoid(x)
+    softplus = 5,       // f(x) = log(1 + e^(a * x)) / a,         a != 0
+    elu = 6,            // f(x) = x if x > 0 else a * (e^x - 1),  a >= 0
+    mish = 7,           // f(x) = x * tanh(softplus(x))
+    metallic_mean = 8,  // f(x) = (x + sqrt(x^2 + 4)) / 2
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  linreg_moving_mean_type : unsigned char  {
+
+    linreg = 1,
+    forecast = 2,
+    slope = 3,
+    intercept = 4,
+    theta = 5,   // arc-tan of slope
+    degree = 6,  // degree of slope
+};
+
+// ----------------------------------------------------------------------------
+
+// Interpretation of the Durbin-Watson d statistic.
+//
+// The Durbin-Watson bounds test compares d against critical values dL and dU
+// that depend on n (sample size), k (number of regressors excluding the
+// intercept), and the chosen significance level.  Rather than shipping the
+// full table of critical values inside the visitor, DurbinWatsonVisitor
+// returns one of these four classifications based on the commonly-used
+// rule-of-thumb thresholds (see get_result_category() documentation).
+//
+enum class  dw_autocorr_t : unsigned char  {
+
+    positive_autocorr = 1,  // d < dL: reject H0 in favour of +ve AR(1)
+    negative_autocorr = 2,  // d > 4−dL: reject H0 in favour of −ve AR(1)
+    no_autocorr = 3,        // dU < d < 4−dU: fail to reject H0
+    inconclusive = 4,       // dL <= d <= dU or 4−dU <= d <= 4−dL
 };
 
 // ----------------------------------------------------------------------------
@@ -357,14 +538,16 @@ enum class sigmoid_type : unsigned char  {
 // because:
 //    Y[t] = T * S * R is equivalent to log(Y[t]) = log(T) + logt(S) + log(R)
 //
-enum class decompose_type : unsigned char  {
+enum class  decompose_type : unsigned char  {
+
     additive = 1,        // Y(t) = Trend + Seasonal + Residual
     multiplicative = 2,  // Y(t) = Trend * Seasonal * Residual
 };
 
 // ----------------------------------------------------------------------------
 
-enum class box_cox_type : unsigned char  {
+enum class  box_cox_type : unsigned char  {
+
     // y(λ) = (y^λ - 1) / λ,  if λ != 0
     // y(λ) = log(y),         if λ == 0
     //
@@ -385,7 +568,8 @@ enum class box_cox_type : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class bucket_type : unsigned char  {
+enum class  bucket_type : unsigned char  {
+
     // Bucketize by distance between two index values (i.g. X2 - X1 = N)
     //
     by_distance = 1,
@@ -396,8 +580,743 @@ enum class bucket_type : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
+enum class  impurity_type : unsigned char  {
+
+    // Measure how often a randomly chosen element from the set would be
+    // incorrectly labeled
+    //
+    gini_index = 1,
+    // Average level of "information", "surprise", or "uncertainty" inherent
+    // to the variable's possible outcomes.
+    //
+    info_entropy = 2,
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  prob_dist_type : unsigned char  {
+
+    // No negative values
+    // yi = xi / sum(X)
+    //
+    arithmetic = 1,
+
+    // All values must be >= 1
+    // yi = loge(xi) / sum(loge(X))
+    //
+    log = 2,
+
+    // yi = e^xi / sum(e^X)
+    //
+    softmax = 3,
+
+    // yi = 2^xi / sum(2^X)
+    //
+    pow2 = 4,
+
+    // yi = 10^xi / sum(10^X)
+    //
+    pow10 = 5,
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  normalization_type : unsigned char  {
+
+    none = 0,
+
+    // These only apply to scalar data
+    //
+    simple = 1,          // V / sum(xi)
+    euclidean = 2,       // V / sqrt(sum(xi^2))
+    maxi = 3,            // V / max(xi)
+    decimal_scaling = 4, // V / 10^max(xi) order
+    log_transform = 5,   // ln(xi)
+    root_transform = 6,  // sqrt(xi)
+
+    // These apply to both scalar and multidimensional data
+    //
+    z_score = 7,         // (V - μ(V)) / σ(V)
+    min_max = 8,         // (V - min(V)) / (max(V) - min(V))
+
+    // These only apply to multidimensional data
+    //
+    unit_length = 9,     // Divide the points by their norms
+    flat_vector = 10,    // Normalize entire collection as one flattened vector
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  loss_function_type : unsigned char  {
+
+    // L = sum(P(x) * log(P(x) / Q(x)))  --  P = Actual, Q = Model
+    //
+    kullback_leibler = 1,
+
+    // L = sum(|Yi - YHati|) / N  --  Y = Actual, YHat = Model
+    //
+    mean_abs_error = 2,
+
+    // L = sum((Yi - YHati)^2) / N  --  Y = Actual, YHat = Model
+    //
+    mean_sqr_error = 3,
+
+    // L = sum(log(1 + Yi) - log(1 + YHati)^2) / N
+    //     Y = Actual, YHat = Model
+    //
+    mean_sqr_log_error = 4,
+
+    // L = -sum(Yi * log(P(Yi))) / N
+    //     Y = Actual, P(Yi) = Model probability prediction
+    //
+    cross_entropy = 5,
+
+    // L = sum(-(Yi * log(P(Yi))) + (1 - Yi) * log(1 - P(Yi))) / N
+    //     Y = Actual binary (0/1), P(Yi) = Model probability prediction
+    //
+    binary_cross_entropy = 6,
+
+    // L = max(sum((1 - Y) * YHat) - sum(Yi * YHati) + 1, 0)
+    //     Y = Actual, YHat = Model
+    //
+    categorical_hinge = 7,
+
+    // L = (Y . YHat) / (||Y|| * ||YHat||)
+    //     Y = Actual, YHat = Model
+    //
+    cosine_similarity = 8,
+
+    // L = sum(log(cosh(YHati - Yi))) / N
+    //     Y = Actual, YHat = Model
+    //
+    log_cosh = 9,
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  vector_sim_type : unsigned char  {
+
+    euclidean_dist = 1,     // Euclidean distance
+    manhattan_dist = 2,     // Manhattan distance
+    dot_product = 3,
+    simple_similarity = 4,  // Two binary vectors must be of equal length
+    cosine_similarity = 5,
+    jaccard_similarity = 6, // Relatively expensive to calculate
+
+    // Hamming distance is number of unequal members
+    // Two vectors must be of equal length
+    //
+    hamming_dist = 7,
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  mean_shift_kernel : unsigned char  {
+
+    uniform = 1,
+    triangular = 2,
+    parabolic = 3,
+    biweight = 4,
+    triweight = 5,
+    tricube = 6,
+    gaussian = 7,
+    cosin = 8,
+    logistic = 9,
+    sigmoid = 10,
+    silverman = 11,
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  stationary_method : unsigned char  {
+
+    differencing = 1,  // Xt = Yt - Yt-1
+    log_trans = 2,     // Xt = ln(Yt)
+    sqrt_trans = 3,    // Xt = sqrt(Yt)
+    boxcox_trans = 4,  // See BoxCoxVisitor
+    decomposition = 5, // See DecomposeVisitor
+    smoothing = 6,     // See ExponentiallyWeightedMeanVisitor
+};
+
+struct  StationaryParams  {
+
+    // Only considered in case of BoxCox transformation method
+    //
+    box_cox_type            bc_type { box_cox_type::original };
+    double                  lambda { 0 };
+    bool                    is_all_positive { true };
+
+    // Only considered in case of Decomposition method
+    //
+    std::size_t             season_period { 0 };
+    double                  dcom_fraction { 0 };
+    double                  dcom_delta { 0 };
+    decompose_type          dcom_type { decompose_type::additive };
+
+    // Only considered in case of Smoothing method
+    //
+    exponential_decay_spec  decay_spec { exponential_decay_spec::span };
+    double                  decay_alpha { 0 };
+    bool                    finite_adjust { true };
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  stationary_test : unsigned char  {
+
+    // Kwiatkowski-Phillips-Schmidt–Shin (KPSS)
+    // In econometrics, Kwiatkowski–Phillips–Schmidt–Shin (KPSS) tests are
+    // used for testing a null hypothesis that an observable time series is
+    // stationary around a deterministic trend (i.e. trend-stationary) against
+    // the alternative of a unit root.
+    // Contrary to most unit root tests, the presence of a unit root is not
+    // the null hypothesis but the alternative. Additionally, in the KPSS test,
+    // the absence of a unit root is not a proof of stationarity but, by
+    // design, of trend-stationarity. This is an important distinction since it
+    // is possible for a time series to be non-stationary, have no unit root
+    // yet be trend-stationary.
+    //
+    // In a KPSS test, a higher test statistic value (meaning a larger
+    // calculated KPSS statistic) indicates a greater likelihood that the time
+    // series is not stationary around a deterministic trend, while a lower
+    // value suggests stationarity; essentially, you want a low KPSS test value
+    // to conclude stationarity.
+    //
+    kpss = 1,
+
+    // Augmented Dickey-Fuller (ADF)
+    // In statistics, an augmented Dickey–Fuller test (ADF) tests the null
+    // hypothesis that a unit root is present in a time series sample. The
+    // alternative hypothesis depends on which version of the test is used,
+    // but is usually stationarity or trend-stationarity. It is an augmented
+    // version of the Dickey–Fuller test for a larger and more complicated set
+    // of time series models.
+    // The augmented Dickey–Fuller (ADF) statistic, used in the test, is a
+    // negative number. The more negative it is, the stronger the rejection of
+    // the hypothesis that there is a unit root at some level of confidence.
+    //
+    // To interpret an ADF test statistic, compare its value to the critical
+    // value at a chosen significance level (usually 0.05): if the test
+    // statistic is less than the critical value, you reject the null
+    // hypothesis and conclude that the time series is stationary; if it's
+    // greater than the critical value, you fail to reject the null hypothesis,
+    // indicating non-stationarity; a more negative ADF statistic signifies
+    // stronger evidence against the null hypothesis (i.e., more likely
+    // stationary).
+    //
+    adf = 2,
+};
+
+struct  StationaryTestParams  {
+
+    // Only considered for KPSS test
+    //
+    double  critical_values[4] { 0.347, 0.463, 0.574, 0.739 };
+
+    // Only considered for ADF test
+    //
+    std::size_t adf_lag { 1 };
+    bool        adf_with_trend { false };
+};
+
+// ----------------------------------------------------------------------------
+
+// These are enumerations for data types that can be read/written from/to files
+//
+enum class  file_dtypes : std::size_t  {
+
+    FLOAT = 0,            // float
+    DOUBLE = 1,           // double
+    LONG_DOUBLE = 2,      // long double
+    SHORT = 3,            // short int
+    USHORT = 4,           // unsigned short int
+    INT = 5,              // int
+    UINT = 6,             // unsigned int
+    LONG = 7,             // long int
+    ULONG = 8,            // unsigned long int
+    LONG_LONG = 9,        // long long int
+    ULONG_LONG = 10,      // unsigned long long int
+    CHAR = 11,            // char
+    UCHAR = 12,           // unsigned char
+    BOOL = 13,            // bool
+
+    STRING = 14,          // std::string
+    VSTR8 = 15,           // FixedSizeString<7> == String8
+    VSTR16 = 16,          // FixedSizeString<15> == String16
+    VSTR32 = 17,          // FixedSizeString<31> == String32
+    VSTR64 = 18,          // FixedSizeString<63> == String64
+    VSTR128 = 19,         // FixedSizeString<127> == String128
+    VSTR512 = 20,         // FixedSizeString<511> == String512
+    VSTR1K = 21,          // FixedSizeString<1023> == String1K
+    VSTR2K = 22,          // FixedSizeString<2047> == String2K
+
+    DATETIME = 23,        // DateTime
+    DATETIME_AME = 24,    // DateTime
+    DATETIME_EUR = 25,    // DateTime
+    DATETIME_ISO = 26,    // DateTime
+
+    STR_DBL_PAIR = 27,    // std::pair<std::string, double>
+    STR_STR_PAIR = 28,    // std::pair<std::string, std::string>
+    DBL_DBL_PAIR = 29,    // std::pair<double, double>
+
+    DBL_VEC = 30,         // std::vector<double>
+    STR_VEC = 31,         // std::vector<std::string>
+    DBL_SET = 32,         // std::set<double>
+    STR_SET = 33,         // std::set<std::string>
+    STR_DBL_MAP = 34,     // std::map<std::string, double>
+    STR_DBL_UNOMAP = 35,  // std::unordered_map<std::string, double>
+};
+
+// ----------------------------------------------------------------------------
+
+enum class  inclusiveness : unsigned char  {
+
+    begin = 1,   // Include the beginning of the range and exclude the end
+    end = 2,     // Exclude the beginning of the range and include the end
+    both = 3,    // Include both tne beginning and end of the range
+    neither = 4, // Exclude both tne beginning and end of the range
+};
+
+// ----------------------------------------------------------------------------
+
+// Enum defining the baseline/normalization mode
+// Used to reduce variance in the policy gradient loss:
+//   loss[i] = -log(π(aᵢ|sᵢ)) * (rᵢ - baseline)
+//
+enum class  policy_loss_baseline : unsigned char  {
+
+    none = 0,        // No baseline: loss = -log(ap) * r
+    constant = 1,    // Constant baseline: loss = -log(ap) * (r - b)
+    mean = 2,        // Mean baseline: loss = -log(ap) * (r - mean(r))
+    standardize = 3, // Standardized: loss = -log(ap) * (r - mean(r)) / std(r)
+};
+
+// ----------------------------------------------------------------------------
+
+// Different methods of detecting anomalous data points. Anomalous data don’t
+// mean NaN or missing datapoints. The best description is unusual datapoints.
+//
+enum class  detect_method : unsigned char  {
+
+    fft = 1,     // Fast Fourier Transform (FFT)
+    iqr = 2,     // Inter-Quartile Range (IQR)
+    lof = 3,     // Local Outlier Factor (LOF)
+    hampel = 4,  // Hampel Filter
+    zscore = 5,  // Z-Score method
+};
+
+// -------------------------------------
+
+template<typename T>
+struct  DefaultAbsDist  {
+
+    inline double
+	operator()(const T &x, const T &y) const noexcept  {
+
+        return (std::fabs(x - y));
+    }
+};
+
+// -------------------------------------
+
+// Parameters to member function detect_and_fill()
+//
+template<typename T, typename F = DefaultAbsDist<T>>
+struct  DetectAndChangeParams  {
+
+    using value_type = T;
+    using distance_func = F;
+
+    // Parameter specific to Z-Score, FFT and LOF
+    //
+    value_type          threshold { 0 };
+
+    // Parameter specific to FFT and LOF
+    //
+    normalization_type  norm_type { normalization_type::none };
+
+    // Parameter specific to FFT
+    //
+    std::size_t         freq_num { 0 };
+
+    // Parameters specific to IQR
+    //
+    value_type          high_fence { 1.5 };
+    value_type          low_fence { 1.5 };
+
+    // Parameter specific to LOF
+    //
+    std::size_t         k { 0 };
+    distance_func       dist_fun  { };
+
+    // Parameters specific to Hampel filter
+    //
+    std::size_t         window_size { 0 };
+    hampel_type         htype { hampel_type::median };
+    value_type          num_stdev { 3.0 };
+};
+
+// ----------------------------------------------------------------------------
+
+// A structure to describe a column of data used in a read operation to
+// decipher data in a file in csv2 format.
+//
+struct  ReadSchema  {
+
+    using ColNameType = String64;
+
+    ColNameType col_name { DF_INDEX_COL_NAME };
+    file_dtypes col_type { file_dtypes::ULONG };
+
+    // This is number of records in the given column. Number of records in
+    // header or schema are for efficiently and only once allocate memory for
+    // the given column. In other words, the number of records doesn't need to
+    // be accurate. I could be zero or an approximation or accurate. Of course
+    // if it is not accurate you may allocate more memory than you need or
+    // allocate multiple times.
+    //
+    std::size_t num_rows { 0 };
+
+    // 0-based index of columns starting at index column at 0.
+    // Regular columns start at 1.
+    //
+    int         col_idx { -1 };
+};
+
+// Parameters to read() function of DataFrame
+//
+struct  ReadParams  {
+
+    using SchemaVec = std::vector<ReadSchema>;
+
+    // If true, it only reads the data columns and skips the index column
+    //
+    bool        columns_only { false };
+
+    // Start reading data from this row number.
+    // It only applies to csv2 and binary formats
+    //
+    std::size_t starting_row { 0 };
+
+    // Only read this many rows of data.
+    // It only applies to csv2 and binary formats
+    //
+    std::size_t num_rows { std::numeric_limits<std::size_t>::max() };
+
+    // These are only considered in csv2 format. They are ignored in all
+    // other formats.
+    //
+    // If schema is nonempty, it indicates that the caller wants to read a csv
+    // file that was not generated by C++ DataFrame. The schema must
+    // contain the relevant entries for each column of data. The first entry
+    // in schema must be the index column. The schema must have an entry for
+    // each column in the file, in the order they appear in the file. All
+    // entries in ReadSchema struct must be set, again in the order they
+    // appear in the file. This also allows the user to skip column(s) in the
+    // file they don't want to read into a DataFrame.
+    // The skip_first_line is checked after it is determined that schema is
+    // nonempty. skip_first_line means the first line of the file is a header
+    // that was not generated by C++ DataFrame and must be skipped.
+    //
+    bool        skip_first_line { true };
+    SchemaVec   schema { };
+
+    // This only applies to csv and csv2 formats. It specifies the delimiting
+    // (separating) character.
+    //
+    char        delim { ',' };
+};
+
+// ----------------------------------------------------------------------------
+
+// Parameters to write() function of DataFrame
+//
+template<DT_ALLOWABLE_FORMATS DT_F = DT_FORMAT>
+struct  WriteParams  {
+
+    // Floating-point values precision when written to a file
+    //
+    std::streamsize precision { 12 };
+
+    // If true, it only reads the data columns and skips the index column
+    //
+    bool            columns_only { false };
+
+    // Max number of rows to write
+    //
+    long            max_recs { std::numeric_limits<long>::max() };
+
+    // This specifies with what format DateTime columns are written into a csv
+    // file. This only applies to csv2 format.
+    // The only permitted formats are DT_PRECISE, ISO_DT_TM, AMR_DT_TM,
+    // EUR_DT_TM, ISO_DT, AMR_DT, and EUR_DT.
+    // See Dateitme docs (DT_FORMAT) for more info.
+    // The default format is seconds since Epoch.nanoseconds.
+    //
+    DT_F            dt_format { DT_FORMAT::DT_PRECISE };
+
+    // This only applies to csv and csv2 formats. It specifies the delimiting
+    // (separating) character.
+    //
+    char            delim { ',' };
+
+    // This only applies to csv2 format. If false, the header/column-list
+    // line is not written -- only the data rows are. This is what lets
+    // StreamWriter write a csv2 header once and then append many chunks of
+    // data rows via repeated write() calls.
+    //
+    bool            write_header { true };
+};
+
+// ----------------------------------------------------------------------------
+
+struct  PCAParams  {
+
+    normalization_type  norm_type { normalization_type::z_score };
+
+    // If populated (set above zero), number of top eigen values to keep.
+    //
+    long                num_comp_to_keep { 0 };
+
+    // If populated (num_comp_is 0), percentage of eigen values to keep.
+    // 0.9 means 90%.
+    //
+    double              pct_comp_to_keep { 0.9 };
+};
+
+// ----------------------------------------------------------------------------
+
+struct  ICAParams  {
+
+    using seed_t = std::random_device::result_type;
+
+    // First center the data matrix
+    //
+    bool                center { true };
+
+    // Max number of iterations before giving up
+    //
+    std::size_t         num_iter { 200 };
+
+    // Epsilon value to call it done
+    //
+    double              epsilon { 1e-5 };
+
+    // Nonlinearity applied to data
+    //
+    sigmoid_type        nonlinearity { sigmoid_type::hyperbolic_tan };
+
+    // Seed for random number generator
+    //
+    seed_t              seed { seed_t(-1) };
+};
+
+// ----------------------------------------------------------------------------
+
+// Canonical correlation analysis result
+//
+template<typename T>
+struct  CanonCorrResult  {
+
+    // These values represent the strength of the linear relationship between
+    // each pair of canonical variates, ranging from -1 to 1, with higher
+    // absolute values signifying a stronger association.
+    //
+    std::vector<T>  coeffs { };     // Canonical correlation coefficients
+
+    // The Redundancy Index is a measure that indicates how much variance in
+    // one set of variables is explained by the linear combination of the other
+    // set of variables. This was proposed by Stewart and Love (1968).
+    //
+    T               x_red_idx { };  // Redundancy index for X
+    T               y_red_idx { };  // Redundancy index for Y
+};
+
+// ----------------------------------------------------------------------------
+
+// Parameter to the SeasonalPeriodVisitor constructor
+//
+template<typename T>
+struct  SeasonalityParams  {
+
+    // Remove trend
+    bool        detrend { true };
+    // Remove serial correlation by differencing
+    bool        de_serial_corr { false };
+
+    // Parameters to generate trend using LOWESS
+    // The two parameters below must be adjusted for different datasets
+    // carefully sometimes by trail and error. The defaults are suitable for
+    // financial market data
+    //
+    std::size_t num_loops { 3 };  // Number of loops
+    // The fraction of the data used when estimating each y-value.
+    T           frac { 0.08 };
+    // Distance within which to use linear-interpolation instead of regression
+    T           delta { 0.0001 };
+
+    // Assume the time series is per 1 unit of time
+    std::size_t sampling_rate { 1 };
+};
+
+// ----------------------------------------------------------------------------
+
+template<typename T>
+struct  KShapeParams  {
+
+    // Is T a random access container? In other words, are we
+    // dealing with multidimensional data?
+    //
+    static constexpr bool   IS_MD { random_acc_cont<T> };
+
+    using data_t =
+        typename std::conditional_t<! IS_MD,
+                                    lazy_type<T>,
+                                    value_type_of<T>>::type;
+
+    using seed_t = std::random_device::result_type;
+
+    // Parameter for how to normalize the columns
+    //
+    normalization_type  norm_t { normalization_type::z_score };
+
+    // Max iteration to extract the centroid for a shape
+    //
+    long                shape_iter { 10L };
+
+    // Max iteration for main algorithm
+    //
+    long                max_iter { 1000L };
+
+    // The min difference in the main loop to break out
+    //
+    data_t              epsilon { data_t(1e-8) };
+
+    // Seed for the random number generator. The default is random seed
+    //
+    seed_t              seed { seed_t(-1) };
+};
+
+// ----------------------------------------------------------------------------
+
+// The theoretical variogram/covariance model used to characterize spatial
+// (or spatio-temporal) correlation as a function of separation distance h.
+//
+enum class  VariogramModel : unsigned char  {
+
+    spherical = 1,    // Bounded - Most common default. Linear near origin.
+    exponential = 2,  // Bounded - Gradual decay. Common in hydrology.
+    gaussian = 3,     // Bounded - Parabolic near origin - very smooth fields.
+    matern = 4,       // Bounded - Generalizes exponential/Gaussian via smooth.
+    power = 5,        // Unbounded - Non-stationary / fractal processes.
+    linear = 6,       // Unbounded - Special case of power with exponent = 1.
+    logarithmic = 7,  // Unbounded - Intrinsic random functions of order 1.
+};
+
+// All tunable hyper-parameters of a Kriging model are grouped into this one
+// structure, decoupling "what the model is" from "how it is computed". The
+// same KrigingVisitor implementation dispatches on params_.model at runtime,
+// so switching models is a one-field change with no recompilation of logic.
+//
+template<typename T = double>
+struct  KrigingParams  {
+
+    using value_type = T;
+
+    // Which theoretical variogram/covariance family to use.
+    //
+    VariogramModel  model { VariogramModel::spherical };
+
+    // Nugget (c0): discontinuity at h=0 -- measurement error / micro-scale
+    // variability. Must be >= 0.
+    //
+    value_type      nugget { 0 };
+
+    // Partial sill (c): structural variance above the nugget. Total sill is
+    // (nugget + sill). Ignored by power/linear/logarithmic (unbounded).
+    // Must be >= 0.
+    //
+    value_type      sill { 1 };
+
+    // Range (a): practical correlation distance for bounded models. Must be
+    // > 0. For Matérn this acts as the length-scale ρ.
+    //
+    value_type      range { 1 };
+
+    // Matérn smoothness parameter ν (nu). Common values: 0.5 (== exponential)
+    // 1.5, 2.5, and the limit ν -> infinity (== Gaussian). Only used when
+    // model == matern. Must be > 0.
+    //
+    value_type      matern_smoothness { 1.5 };
+
+    // Exponent α for the power model, 0 < α < 2.  α == 1 reduces to the
+    // linear model (also selectable directly via model == linear).
+    // Only used when model == power.
+    //
+    value_type      power_exponent { 1.0 };
+
+    // Small positive jitter added to the diagonal of the kriging system
+    // before factorization, purely for numerical stability (handles
+    // near-duplicate coordinates / ill-conditioning). This is independent of
+    // the statistical nugget effect above.
+    //
+    value_type      ridge { 1e-10 };
+
+    // If true, perform Ordinary Kriging (unknown constant mean, estimated
+    // via the Lagrange-multiplier-augmented system). If false, perform
+    // Simple Kriging assuming a known mean (simple_mean below) with zero-mean
+    // residuals -- this drops the Lagrange row/column and is cheaper.
+    //
+    bool            ordinary { true };
+
+    // Used only when ordinary == false.
+    //
+    value_type      simple_mean { 0 };
+
+    // Geometric anisotropy: stretch distances along a preferred direction
+    // before evaluating the variogram. anisotropy_ratio is range_minor /
+    // range_major (1 == isotropic). anisotropy_angle is the direction of the
+    // major axis in radians, measured counter-clockwise from the x-axis.
+    // Only meaningful for 2D coordinates.
+    //
+    value_type      anisotropy_ratio { 1.0 };
+    value_type      anisotropy_angle { 0.0 };
+
+    // If > 0, switches to local (moving-window) Kriging: only the
+    // max_neighbors closest known points are used to predict each unknown
+    // location, turning an O(N^3) global solve into many small solves --
+    // essential for large N. 0 means use all points (global Kriging).
+    //
+    std::size_t     max_neighbors { 0 };
+
+    inline void sanity_check() const  {
+
+#ifdef HMDF_SANITY_EXCEPTIONS
+        if (nugget < 0)
+            throw DataFrameError("KrigingParams: nugget must be >= 0");
+        if (sill < 0)
+            throw DataFrameError("KrigingParams: sill must be >= 0");
+        if (range <= 0)
+            throw DataFrameError("KrigingParams: range must be > 0");
+        if (model == VariogramModel::matern && matern_smoothness <= 0)
+            throw DataFrameError(
+                "KrigingParams: matern_smoothness must be > 0");
+        if (model == VariogramModel::power &&
+            (power_exponent <= 0 || power_exponent >= 2))
+            throw DataFrameError(
+                "KrigingParams: power_exponent must be in (0, 2)");
+        if (anisotropy_ratio <= 0 || anisotropy_ratio > 1.0)
+            throw DataFrameError(
+                "KrigingParams: anisotropy_ratio must be in (0, 1]");
+#endif // HMDF_SANITY_EXCEPTIONS
+    }
+};
+
+// ----------------------------------------------------------------------------
+
 template<typename T>
 struct  RandGenParams  {
+
     T   min_value { std::numeric_limits<T>::min() };
     T   max_value { std::numeric_limits<T>::max() };
 
@@ -405,37 +1324,37 @@ struct  RandGenParams  {
 
     // The p distribution parameter (probability of generating true)
     //
-    double      prob_true { 0.5 };
+    double          prob_true { 0.5 };
     // The t or k distribution parameter (number of trials)
     //
-    std::size_t t_dist { 1 };
+    std::size_t     t_dist { 1 };
     // The μ distribution parameter (the mean of the distribution)
     //
-    double      mean { 1.0 };
+    double          mean { 0 };
     // the σ distribution parameter (standard deviation)
     //
-    double      std { 0 };
+    double          std { 1 };
     // The λ distribution parameter (the rate parameter)
     //
-    double      lambda { 1.0 };
+    double          lambda { 1.0 };
     // The α distribution parameter (shape, location)
     //
-    double      alpha { 1.0 };
+    double          alpha { 1.0 };
     // The β distribution parameter (scale)
     //
-    double      beta { 1.0 };
+    double          beta { 1.0 };
     // The m distribution parameter (log-scale)
     //
-    double      m { 0 };
+    double          m { 0 };
     // The s distribution parameter (shape)
     //
-    double      s { 1.0 };
+    double          s { 1.0 };
     // The n distribution parameter (degrees of freedom)
     //
-    double      n { 1.0 };
-    // degrees of freedom for fisher_f_distribution
+    double          n { 1.0 };
+    // Degrees of freedom for fisher_f_distribution
     //
-    double      n2 { 1.0 };
+    double          n2 { 1.0 };
 };
 
 // ----------------------------------------------------------------------------
@@ -443,9 +1362,36 @@ struct  RandGenParams  {
 // It represents a range with begin and end within a continuous memory space
 //
 template<typename T>
-struct Index2D  {
+struct  Index2D  {
+
     T   begin {};
     T   end {};
+};
+
+// ----------------------------------------------------------------------------
+
+template<typename T>
+using KNNPair = std::pair<std::vector<T>, std::size_t>;
+
+template<typename T>
+using KNNResult = std::vector<KNNPair<T>>;
+
+template<typename T>
+struct  KNNDistFunc  {
+
+    // Is T a random access container? In other words, are we
+    // dealing with multidimensional data?
+    //
+    static constexpr bool   IS_MD { random_acc_cont<T> };
+
+    using data_t =
+        typename std::conditional_t<! IS_MD,
+                                    lazy_type<T>,
+                                    value_type_of<T>>::type;
+
+    using func_t = std::function<data_t(const std::vector<T> &x,
+                                        const std::vector<T> &y)>;
+
 };
 
 // ----------------------------------------------------------------------------
@@ -456,64 +1402,141 @@ using GroupBySpec = std::tuple<const char *, const char *, V>;
 // ----------------------------------------------------------------------------
 
 template<typename, typename>
-struct template_switch {  };
+struct  template_switch  {   };
 
 template<typename A, template<typename> typename C, typename B>
-struct template_switch<A, C<B>> { using type = C<A>; };
+struct  template_switch<A, C<B>>  { using type = C<A>; };
 
 // ----------------------------------------------------------------------------
 
-template<typename T, typename U>
-struct type_declare;
+template<class T, typename U, std::size_t A>
+struct  type_declare;
 
-template<typename U>
-struct type_declare<HeteroVector, U>  { using type = std::vector<U>; };
-
-template<typename U>
-struct type_declare<HeteroView, U>  { using type = VectorView<U>; };
-
-template<typename U>
-struct type_declare<HeteroPtrView, U>  { using type = VectorPtrView<U>; };
-
-// ----------------------------------------------------------------------------
-
-template<typename T> struct is_complex  {
-    inline static const bool    value = false;
-};
-template<typename T> struct is_complex<std::complex<T>>  {
-    inline static const bool    value = true;
+template<typename U, std::size_t A>
+struct  type_declare<HeteroVector<A>, U, A>  {
+    using type = std::vector<U, typename allocator_declare<U, A>::type>;
 };
 
+template<typename U, std::size_t A>
+struct  type_declare<HeteroView<A>, U, A>  { using type = VectorView<U, A>; };
+
+template<typename U, std::size_t A>
+struct  type_declare<HeteroConstView<A>, U, A>  {
+    using type = VectorConstView<U, A>;
+};
+
+template<typename U, std::size_t A>
+struct  type_declare<HeteroPtrView<A>, U, A>  {
+    using type = VectorPtrView<U, A>;
+};
+
+template<typename U, std::size_t A>
+struct  type_declare<HeteroConstPtrView<A>, U, A>  {
+    using type = VectorConstPtrView<U, A>;
+};
+
 // ----------------------------------------------------------------------------
 
-// H stands for a heterogeneous vector
+template<typename T>
+struct  is_complex  {
+    inline static constexpr bool    value = false;
+};
+template<typename T>
+struct  is_complex<std::complex<T>>  {
+    inline static constexpr bool    value = true;
+};
+
+// ----------------------------------------------------------------------------
+
+struct  Empty  {  };
+
+#define COND_DECL(COND, TYPE, VAR_NAME) \
+    [[no_unique_address]] std::conditional_t<COND, TYPE, Empty> VAR_NAME { };
+
+// ----------------------------------------------------------------------------
+
+// Since std::is_arithmetic cannot be overloaded, we need a way to determine
+// if a user-defined type supports arithmetic
+//
+template<typename ...>
+struct  make_void  { using type = void; };
+
+template<typename ... Ts>
+using void_t = typename make_void<Ts ...>::type;
+
+template<typename T, typename = void>
+struct  supports_arithmetic : std::false_type  {  };
+
+template<typename T>
+struct  supports_arithmetic<
+    T,
+    void_t<decltype(std::declval<T>() + std::declval<T>()),
+           decltype(std::declval<T>() - std::declval<T>()),
+           decltype(std::declval<T>() * std::declval<T>()),
+           decltype(std::declval<T>() / std::declval<T>())>>
+    : std::true_type  {  };
+
+// ----------------------------------------------------------------------------
+
+// I stands for Index type
+// H stands for Heterogeneous vector
+// A stands for memory Alignment
 //
 template<typename I, typename H>
-class DataFrame;
+class   DataFrame;
 
 template<typename I>
-using StdDataFrame = DataFrame<I, HeteroVector>;
+using StdDataFrame = DataFrame<I, HeteroVector<0>>;
+
+// Convenient typedefs to facilitate SIMD operations
+//
+template<typename I>
+using StdDataFrame64 = DataFrame<I, HeteroVector<64>>;
 
 template<typename I>
-using DataFrameView = DataFrame<I, HeteroView>;
+using StdDataFrame128 = DataFrame<I, HeteroVector<128>>;
 
 template<typename I>
-using DataFramePtrView = DataFrame<I, HeteroPtrView>;
+using StdDataFrame256 = DataFrame<I, HeteroVector<256>>;
+
+template<typename I>
+using StdDataFrame512 = DataFrame<I, HeteroVector<512>>;
+
+template<typename I>
+using StdDataFrame1024 = DataFrame<I, HeteroVector<1024>>;
 
 // ----------------------------------------------------------------------------
 
-// Evertyhting is in bytes. The numbers are estimates, since memory allocated
+template<typename T>
+struct  _scalar_type_  { using type = T; };
+
+template<typename T>
+requires random_acc_cont<T>
+struct  _scalar_type_<T>  { using type = typename T::value_type; };
+
+template<typename T>
+using scalar_t = typename _scalar_type_<T>::type;
+
+// ----------------------------------------------------------------------------
+
+inline const std::vector<std::string>   describe_index_col  {
+    "COUNT", "MISSING", "MEAN", "STD", "MIN", "MAX", "25%", "50%", "75%"
+};
+
+// ----------------------------------------------------------------------------
+
+// Everything is in bytes. The numbers are estimates, since memory allocated
 // is really unknown to the objects such as vectors.
 // If type has dynamically allocated memory, it is not counted here
 //
 struct  MemUsage  {
 
-    size_t  column_used_memory { 0 };
-    size_t  column_capacity_memory { 0 };
-    size_t  column_type_size { 0 };
-    size_t  index_used_memory { 0 };
-    size_t  index_capacity_memory { 0 };
-    size_t  index_type_size { 0 };
+    std::size_t column_used_memory { 0 };
+    std::size_t column_capacity_memory { 0 };
+    std::size_t column_type_size { 0 };
+    std::size_t index_used_memory { 0 };
+    std::size_t index_capacity_memory { 0 };
+    std::size_t index_type_size { 0 };
 
     template<typename S>
     friend S &operator << (S &stream, const MemUsage &mu)  {
@@ -527,6 +1550,62 @@ struct  MemUsage  {
                << "Index Type Size: " << mu.index_type_size << '\n';
         return (stream);
     }
+};
+
+// ----------------------------------------------------------------------------
+
+struct  StringStats  {
+
+    double  avg_size { 0 };        // Average of sizes
+    double  std_size { 0 };        // Standard deviation of sizes
+    double  avg_alphabets { 0 };   // Average number of a - z, A - Z
+    double  avg_caps { 0 };        // Average number of A - Z
+    double  avg_digits { 0 };      // Average number of 0 - 9
+    double  avg_spaces { 0 };      // Average number of ' '
+    double  avg_arithmetic { 0 };  // Average number of + - / *
+    double  avg_line_feed { 0 };   // Average number of \n
+
+    // Punctuations. Anything that's not an alphabet, digit, space, line feed,
+    // or arithmetic operators.
+    //
+    double  avg_puncts { 0 };
+};
+
+// ----------------------------------------------------------------------------
+
+// Helper macro for building DataFrame
+// e.g.:
+// struct MyDfSchema  {
+//     DECL_COL(Col0, std::string);
+//     DECL_COL(Col1, int32_t);
+//     DECL_COL(Col2, int64_t);
+//     DECL_COL(Col3, double);
+// };
+//
+// then usage:
+// df.load_column<MyDfSchema::Col0::type>(MyDfSchema::Col0::name,
+//                                        std::move(col_vec));
+
+#define DECL_COL(COLUMN_NAME, C_TYPE) \
+    struct  COLUMN_NAME  { \
+\
+        constexpr static const char *name = {#COLUMN_NAME}; \
+\
+        using type = C_TYPE; \
+\
+        const char *col_name() const  { return (name); } \
+    }; \
+
+template <typename T>
+struct  CommonColumn  {
+
+    explicit CommonColumn(std::string_view col_name) : name_ (col_name)  {  }
+
+    using type = T;
+
+    [[nodiscard]] const char *col_name() const  { return (name_.c_str()); }
+
+    std::string name_;
 };
 
 } // namespace hmdf

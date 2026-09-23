@@ -1,7 +1,7 @@
 // Hossein Moein
 // December 8, 2020
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -28,6 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <future>
+#include <ranges>
 #include <tuple>
 
 // ----------------------------------------------------------------------------
@@ -35,7 +36,58 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace hmdf
 {
 
-template<typename I, typename  H>
+template<typename I, typename H>
+template<typename T>
+void DataFrame<I, H>::
+apply(const char *col_name,
+      std::function<bool(const IndexType &, T &)> &&func)  {
+
+    auto    &col = get_column<T>(col_name);
+
+    for (const auto &[idx, val] : std::ranges::views::zip(indices_, col))
+        if (! func(idx, val)) [[unlikely]]  break;
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename T1, typename T2>
+void DataFrame<I, H>::
+apply(const char *col_name1, const char *col_name2,
+      std::function<bool(const IndexType &, T1 &, T2 &)> &&func)  {
+
+    SpinGuard   guard (lock_);
+    auto        &col1 = get_column<T1>(col_name1, false);
+    auto        &col2 = get_column<T2>(col_name2, false);
+
+    guard.release();
+    for (const auto &[idx, val1, val2]
+             : std::ranges::views::zip(indices_, col1, col2))
+        if (! func(idx, val1, val2)) [[unlikely]]  break;
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename T1, typename T2, typename T3>
+void DataFrame<I, H>::
+apply(const char *col_name1, const char *col_name2, const char *col_name3,
+      std::function<bool(const IndexType &, T1 &, T2 &, T3 &)> &&func)  {
+
+    SpinGuard   guard (lock_);
+    auto        &col1 = get_column<T1>(col_name1, false);
+    auto        &col2 = get_column<T2>(col_name2, false);
+    auto        &col3 = get_column<T3>(col_name3, false);
+
+    guard.release();
+    for (const auto &[idx, val1, val2, val3]
+             : std::ranges::views::zip(indices_, col1, col2, col3))
+        if (! func(idx, val1, val2, val3)) [[unlikely]]  break;
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
 template<typename ... Ts>
 void DataFrame<I, H>::multi_visit (Ts ... args)  {
 
@@ -59,7 +111,7 @@ void DataFrame<I, H>::multi_visit (Ts ... args)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename ... Ts>
 void DataFrame<I, H>::multi_visit(Ts ... args) const  {
 
@@ -68,7 +120,7 @@ void DataFrame<I, H>::multi_visit(Ts ... args) const  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T, typename V>
 V &DataFrame<I, H>::visit (const char *name, V &visitor, bool in_reverse)  {
 
@@ -79,7 +131,7 @@ V &DataFrame<I, H>::visit (const char *name, V &visitor, bool in_reverse)  {
     T               nan_val = get_nan<T>();
 
     visitor.pre();
-    if (! in_reverse)  {
+    if (! in_reverse) [[likely]]  {
         for (; i < min_s; ++i)
             visitor (indices_[i], vec[i]);
         for (; i < idx_s; ++i)
@@ -101,7 +153,7 @@ V &DataFrame<I, H>::visit (const char *name, V &visitor, bool in_reverse)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T, typename V>
 V &DataFrame<I, H>::
 visit (const char *name, V &visitor, bool in_reverse) const  {
@@ -112,12 +164,13 @@ visit (const char *name, V &visitor, bool in_reverse) const  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T, typename V>
 std::future<V &> DataFrame<I, H>::
 visit_async(const char *name, V &visitor, bool in_reverse)  {
 
-    return (std::async(std::launch::async,
+    return (thr_pool_.dispatch(
+                       true,
                        static_cast<V &(DataFrame::*)(const char *, V &, bool)>
                           (&DataFrame::visit<T, V>),
                        this,
@@ -128,12 +181,13 @@ visit_async(const char *name, V &visitor, bool in_reverse)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T, typename V>
 std::future<V &> DataFrame<I, H>::
 visit_async(const char *name, V &visitor, bool in_reverse) const  {
 
-    return (std::async(std::launch::async,
+    return (thr_pool_.dispatch(
+                       true,
                        static_cast<V &(DataFrame::*)(const char *,
                                                      V &,
                                                      bool) const>
@@ -146,13 +200,17 @@ visit_async(const char *name, V &visitor, bool in_reverse) const  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename V>
 V &DataFrame<I, H>::
 visit (const char *name1, const char *name2, V &visitor, bool in_reverse)  {
 
-    auto            &vec1 = get_column<T1>(name1);
-    auto            &vec2 = get_column<T2>(name2);
+    SpinGuard   guard (lock_);
+    auto        &vec1 = get_column<T1>(name1, false);
+    auto        &vec2 = get_column<T2>(name2, false);
+
+    guard.release();
+
     const size_type idx_s = indices_.size();
     const size_type data_s1 = vec1.size();
     const size_type data_s2 = vec2.size();
@@ -162,8 +220,8 @@ visit (const char *name1, const char *name2, V &visitor, bool in_reverse)  {
     T2              nan_val2 = get_nan<T2>();
 
     visitor.pre();
-    if (! in_reverse)  {
-        for (; i < min_s; ++i)
+    if (! in_reverse) [[likely]]  {
+        for (; i < min_s; ++i) [[likely]]
             visitor (indices_[i], vec1[i], vec2[i]);
         for (; i < idx_s; ++i)
             visitor (indices_[i],
@@ -178,7 +236,7 @@ visit (const char *name1, const char *name2, V &visitor, bool in_reverse)  {
             visitor (indices_[i],
                      ((idx_s_1 - i) < data_s1) ? vec1[idx_s_1 - i] : nan_val1,
                      ((idx_s_1 - i) < data_s2) ? vec2[idx_s_1 - i] : nan_val2);
-        for (; i < min_s; ++i)
+        for (; i < min_s; ++i) [[likely]]
             visitor (indices_[idx_s_1 - i],
                      vec1[idx_s_1 - i],
                      vec2[idx_s_1 - i]);
@@ -190,7 +248,7 @@ visit (const char *name1, const char *name2, V &visitor, bool in_reverse)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename V>
 V &DataFrame<I, H>::
 visit (const char *name1,
@@ -204,7 +262,7 @@ visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename V>
 std::future<V &> DataFrame<I, H>::
 visit_async(const char *name1,
@@ -212,8 +270,8 @@ visit_async(const char *name1,
             V &visitor,
             bool in_reverse)  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *, const char *, V &, bool)>
             (&DataFrame::visit<T1, T2, V>),
         this,
@@ -225,7 +283,7 @@ visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename V>
 std::future<V &> DataFrame<I, H>::
 visit_async(const char *name1,
@@ -233,8 +291,8 @@ visit_async(const char *name1,
             V &visitor,
             bool in_reverse) const  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       V &,
@@ -249,7 +307,7 @@ visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename V>
 V &DataFrame<I, H>::
 visit (const char *name1,
@@ -258,9 +316,13 @@ visit (const char *name1,
        V &visitor,
        bool in_reverse)  {
 
-    auto            &vec1 = get_column<T1>(name1);
-    auto            &vec2 = get_column<T2>(name2);
-    auto            &vec3 = get_column<T3>(name3);
+    SpinGuard   guard (lock_);
+    auto        &vec1 = get_column<T1>(name1, false);
+    auto        &vec2 = get_column<T2>(name2, false);
+    auto        &vec3 = get_column<T3>(name3, false);
+
+    guard.release();
+
     const size_type idx_s = indices_.size();
     const size_type data_s1 = vec1.size();
     const size_type data_s2 = vec2.size();
@@ -273,8 +335,8 @@ visit (const char *name1,
     T3              nan_val3 = get_nan<T3>();
 
     visitor.pre();
-    if (! in_reverse)  {
-        for (; i < min_s; ++i)
+    if (! in_reverse) [[likely]]  {
+        for (; i < min_s; ++i) [[likely]]
             visitor (indices_[i], vec1[i], vec2[i], vec3[i]);
         for (; i < idx_s; ++i)
             visitor (indices_[i],
@@ -291,7 +353,7 @@ visit (const char *name1,
                      ((idx_s_1 - i) < data_s1) ? vec1[idx_s_1 - i] : nan_val1,
                      ((idx_s_1 - i) < data_s2) ? vec2[idx_s_1 - i] : nan_val2,
                      ((idx_s_1 - i) < data_s3) ? vec3[idx_s_1 - i] : nan_val3);
-        for (; i < min_s; ++i)
+        for (; i < min_s; ++i) [[likely]]
             visitor (indices_[idx_s_1 - i],
                      vec1[idx_s_1 - i],
                      vec2[idx_s_1 - i],
@@ -304,7 +366,7 @@ visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename V>
 V &DataFrame<I, H>::
 visit (const char *name1,
@@ -319,7 +381,7 @@ visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename V>
 std::future<V &> DataFrame<I, H>::
 visit_async(const char *name1,
@@ -328,8 +390,8 @@ visit_async(const char *name1,
             V &visitor,
             bool in_reverse)  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -346,7 +408,7 @@ visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename V>
 std::future<V &> DataFrame<I, H>::
 visit_async(const char *name1,
@@ -355,8 +417,8 @@ visit_async(const char *name1,
             V &visitor,
             bool in_reverse) const  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -373,7 +435,7 @@ visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename V>
 V &DataFrame<I, H>::
 visit (const char *name1,
@@ -383,10 +445,14 @@ visit (const char *name1,
        V &visitor,
        bool in_reverse)  {
 
-    auto            &vec1 = get_column<T1>(name1);
-    auto            &vec2 = get_column<T2>(name2);
-    auto            &vec3 = get_column<T3>(name3);
-    auto            &vec4 = get_column<T4>(name4);
+    SpinGuard   guard (lock_);
+    auto        &vec1 = get_column<T1>(name1, false);
+    auto        &vec2 = get_column<T2>(name2, false);
+    auto        &vec3 = get_column<T3>(name3, false);
+    auto        &vec4 = get_column<T4>(name4, false);
+
+    guard.release();
+
     const size_type idx_s = indices_.size();
     const size_type data_s1 = vec1.size();
     const size_type data_s2 = vec2.size();
@@ -401,8 +467,8 @@ visit (const char *name1,
     T4              nan_val4 = get_nan<T4>();
 
     visitor.pre();
-    if (! in_reverse)  {
-        for (; i < min_s; ++i)
+    if (! in_reverse) [[likely]]  {
+        for (; i < min_s; ++i) [[likely]]
             visitor (indices_[i], vec1[i], vec2[i], vec3[i], vec4[i]);
         for (; i < idx_s; ++i)
             visitor (indices_[i],
@@ -421,7 +487,7 @@ visit (const char *name1,
                      ((idx_s_1 - i) < data_s2) ? vec2[idx_s_1 - i] : nan_val2,
                      ((idx_s_1 - i) < data_s3) ? vec3[idx_s_1 - i] : nan_val3,
                      ((idx_s_1 - i) < data_s4) ? vec4[idx_s_1 - i] : nan_val4);
-        for (; i < min_s; ++i)
+        for (; i < min_s; ++i) [[likely]]
             visitor (indices_[idx_s_1 - i],
                      vec1[idx_s_1 - i],
                      vec2[idx_s_1 - i],
@@ -435,7 +501,7 @@ visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename V>
 V &DataFrame<I, H>::
 visit (const char *name1,
@@ -451,7 +517,7 @@ visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename V>
 std::future<V &> DataFrame<I, H>::
 visit_async(const char *name1,
@@ -461,8 +527,8 @@ visit_async(const char *name1,
             V &visitor,
             bool in_reverse)  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -481,7 +547,7 @@ visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename V>
 std::future<V &> DataFrame<I, H>::
 visit_async(const char *name1,
@@ -491,8 +557,8 @@ visit_async(const char *name1,
             V &visitor,
             bool in_reverse) const  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -511,7 +577,7 @@ visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename T5,
          typename V>
 V &DataFrame<I, H>::
@@ -523,11 +589,15 @@ visit (const char *name1,
        V &visitor,
        bool in_reverse)  {
 
-    auto            &vec1 = get_column<T1>(name1);
-    auto            &vec2 = get_column<T2>(name2);
-    auto            &vec3 = get_column<T3>(name3);
-    auto            &vec4 = get_column<T4>(name4);
-    auto            &vec5 = get_column<T5>(name5);
+    SpinGuard   guard (lock_);
+    auto        &vec1 = get_column<T1>(name1, false);
+    auto        &vec2 = get_column<T2>(name2, false);
+    auto        &vec3 = get_column<T3>(name3, false);
+    auto        &vec4 = get_column<T4>(name4, false);
+    auto        &vec5 = get_column<T5>(name5, false);
+
+    guard.release();
+
     const size_type idx_s = indices_.size();
     const size_type data_s1 = vec1.size();
     const size_type data_s2 = vec2.size();
@@ -545,8 +615,8 @@ visit (const char *name1,
     T5              nan_val5 = get_nan<T5>();
 
     visitor.pre();
-    if (! in_reverse)  {
-        for (; i < min_s; ++i)
+    if (! in_reverse) [[likely]]  {
+        for (; i < min_s; ++i) [[likely]]
             visitor (indices_[i], vec1[i], vec2[i], vec3[i], vec4[i], vec5[i]);
         for (; i < idx_s; ++i)
             visitor (indices_[i],
@@ -567,7 +637,7 @@ visit (const char *name1,
                      ((idx_s_1 - i) < data_s3) ? vec3[idx_s_1 - i] : nan_val3,
                      ((idx_s_1 - i) < data_s4) ? vec4[idx_s_1 - i] : nan_val4,
                      ((idx_s_1 - i) < data_s5) ? vec5[idx_s_1 - i] : nan_val5);
-        for (; i < min_s; ++i)
+        for (; i < min_s; ++i) [[likely]]
             visitor (indices_[idx_s_1 - i],
                      vec1[idx_s_1 - i],
                      vec2[idx_s_1 - i],
@@ -582,7 +652,7 @@ visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename T5,
          typename V>
 V &DataFrame<I, H>::
@@ -600,7 +670,7 @@ visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename T5,
          typename V>
 std::future<V &> DataFrame<I, H>::
@@ -612,8 +682,8 @@ visit_async(const char *name1,
             V &visitor,
             bool in_reverse)  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -634,7 +704,7 @@ visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename T5,
          typename V>
 std::future<V &> DataFrame<I, H>::
@@ -646,8 +716,8 @@ visit_async(const char *name1,
             V &visitor,
             bool in_reverse) const  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -668,7 +738,7 @@ visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T, typename V>
 V &DataFrame<I, H>::
 single_act_visit (const char *name, V &visitor, bool in_reverse)  {
@@ -676,7 +746,7 @@ single_act_visit (const char *name, V &visitor, bool in_reverse)  {
     auto    &vec = get_column<T>(name);
 
     visitor.pre();
-    if (! in_reverse)
+    if (! in_reverse) [[likely]]
         visitor (indices_.begin(), indices_.end(), vec.begin(), vec.end());
     else
         visitor (indices_.rbegin(), indices_.rend(), vec.rbegin(), vec.rend());
@@ -687,7 +757,7 @@ single_act_visit (const char *name, V &visitor, bool in_reverse)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T, typename V>
 V &DataFrame<I, H>::
 single_act_visit (const char *name, V &visitor, bool in_reverse) const  {
@@ -698,13 +768,13 @@ single_act_visit (const char *name, V &visitor, bool in_reverse) const  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T, typename V>
 std::future<V &> DataFrame<I, H>::
 single_act_visit_async(const char *name, V &visitor, bool in_reverse)  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *, V &, bool)>
            (&DataFrame::single_act_visit<T, V>),
         this,
@@ -715,13 +785,13 @@ single_act_visit_async(const char *name, V &visitor, bool in_reverse)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T, typename V>
 std::future<V &> DataFrame<I, H>::
 single_act_visit_async(const char *name, V &visitor, bool in_reverse) const  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *, V &, bool) const>
            (&DataFrame::single_act_visit<T, V>),
         this,
@@ -732,7 +802,7 @@ single_act_visit_async(const char *name, V &visitor, bool in_reverse) const  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename V>
 V &DataFrame<I, H>::
 single_act_visit (const char *name1,
@@ -740,11 +810,13 @@ single_act_visit (const char *name1,
                   V &visitor,
                   bool in_reverse)  {
 
-    const ColumnVecType<T1> &vec1 = get_column<T1>(name1);
-    const ColumnVecType<T2> &vec2 = get_column<T2>(name2);
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(name2, false);
 
+    guard.release();
     visitor.pre();
-    if (! in_reverse)
+    if (! in_reverse) [[likely]]
         visitor (indices_.begin(), indices_.end(),
                  vec1.begin(), vec1.end(),
                  vec2.begin(), vec2.end());
@@ -759,7 +831,7 @@ single_act_visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename V>
 std::future<V &> DataFrame<I, H>::
 single_act_visit_async(const char *name1,
@@ -767,8 +839,8 @@ single_act_visit_async(const char *name1,
                        V &visitor,
                        bool in_reverse)  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *, const char *, V &, bool)>
             (&DataFrame::single_act_visit<T1, T2, V>),
         this,
@@ -780,7 +852,7 @@ single_act_visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename V>
 V &DataFrame<I, H>::
 single_act_visit (const char *name1,
@@ -794,7 +866,7 @@ single_act_visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename V>
 std::future<V &> DataFrame<I, H>::
 single_act_visit_async(const char *name1,
@@ -802,8 +874,8 @@ single_act_visit_async(const char *name1,
                        V &visitor,
                        bool in_reverse) const  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       V &,
@@ -818,7 +890,7 @@ single_act_visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename V>
 V &DataFrame<I, H>::
 single_act_visit (const char *name1,
@@ -827,12 +899,14 @@ single_act_visit (const char *name1,
                   V &visitor,
                   bool in_reverse)  {
 
-    const ColumnVecType<T1> &vec1 = get_column<T1>(name1);
-    const ColumnVecType<T2> &vec2 = get_column<T2>(name2);
-    const ColumnVecType<T3> &vec3 = get_column<T3>(name3);
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(name2, false);
+    const ColumnVecType<T3> &vec3 = get_column<T3>(name3, false);
 
+    guard.release();
     visitor.pre();
-    if (! in_reverse)
+    if (! in_reverse) [[likely]]
         visitor (indices_.begin(), indices_.end(),
                  vec1.begin(), vec1.end(),
                  vec2.begin(), vec2.end(),
@@ -849,7 +923,7 @@ single_act_visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename V>
 V &DataFrame<I, H>::
 single_act_visit (const char *name1,
@@ -864,7 +938,7 @@ single_act_visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename V>
 std::future<V &> DataFrame<I, H>::
 single_act_visit_async(const char *name1,
@@ -873,8 +947,8 @@ single_act_visit_async(const char *name1,
                        V &visitor,
                        bool in_reverse)  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -891,7 +965,7 @@ single_act_visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename V>
 std::future<V &> DataFrame<I, H>::
 single_act_visit_async(const char *name1,
@@ -900,8 +974,8 @@ single_act_visit_async(const char *name1,
                        V &visitor,
                        bool in_reverse) const  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -918,7 +992,7 @@ single_act_visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename V>
 V &DataFrame<I, H>::
 single_act_visit (const char *name1,
@@ -928,13 +1002,15 @@ single_act_visit (const char *name1,
                   V &visitor,
                   bool in_reverse)  {
 
-    const ColumnVecType<T1> &vec1 = get_column<T1>(name1);
-    const ColumnVecType<T2> &vec2 = get_column<T2>(name2);
-    const ColumnVecType<T3> &vec3 = get_column<T3>(name3);
-    const ColumnVecType<T4> &vec4 = get_column<T4>(name4);
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(name2, false);
+    const ColumnVecType<T3> &vec3 = get_column<T3>(name3, false);
+    const ColumnVecType<T4> &vec4 = get_column<T4>(name4, false);
 
+    guard.release();
     visitor.pre();
-    if (! in_reverse)
+    if (! in_reverse) [[likely]]
         visitor (indices_.begin(), indices_.end(),
                  vec1.begin(), vec1.end(),
                  vec2.begin(), vec2.end(),
@@ -953,7 +1029,7 @@ single_act_visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename V>
 V &DataFrame<I, H>::
 single_act_visit (const char *name1,
@@ -969,7 +1045,7 @@ single_act_visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename V>
 std::future<V &> DataFrame<I, H>::
 single_act_visit_async(const char *name1,
@@ -979,8 +1055,8 @@ single_act_visit_async(const char *name1,
                        V &visitor,
                        bool in_reverse)  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -999,7 +1075,7 @@ single_act_visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename V>
 std::future<V &> DataFrame<I, H>::
 single_act_visit_async(const char *name1,
@@ -1009,8 +1085,8 @@ single_act_visit_async(const char *name1,
                        V &visitor,
                        bool in_reverse) const  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -1029,7 +1105,7 @@ single_act_visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename T5,
          typename V>
 V &DataFrame<I, H>::
@@ -1041,14 +1117,16 @@ single_act_visit (const char *name1,
                   V &visitor,
                   bool in_reverse)  {
 
-    const ColumnVecType<T1> &vec1 = get_column<T1>(name1);
-    const ColumnVecType<T2> &vec2 = get_column<T2>(name2);
-    const ColumnVecType<T3> &vec3 = get_column<T3>(name3);
-    const ColumnVecType<T4> &vec4 = get_column<T4>(name4);
-    const ColumnVecType<T5> &vec5 = get_column<T5>(name5);
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(name2, false);
+    const ColumnVecType<T3> &vec3 = get_column<T3>(name3, false);
+    const ColumnVecType<T4> &vec4 = get_column<T4>(name4, false);
+    const ColumnVecType<T5> &vec5 = get_column<T5>(name5, false);
 
+    guard.release();
     visitor.pre();
-    if (! in_reverse)
+    if (! in_reverse) [[likely]]
         visitor (indices_.begin(), indices_.end(),
                  vec1.begin(), vec1.end(),
                  vec2.begin(), vec2.end(),
@@ -1069,7 +1147,7 @@ single_act_visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename T5,
          typename V>
 V &DataFrame<I, H>::
@@ -1088,7 +1166,7 @@ single_act_visit (const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename T5,
          typename V>
 std::future<V &> DataFrame<I, H>::
@@ -1100,8 +1178,8 @@ single_act_visit_async(const char *name1,
                        V &visitor,
                        bool in_reverse)  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,
@@ -1122,7 +1200,7 @@ single_act_visit_async(const char *name1,
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename T1, typename T2, typename T3, typename T4, typename T5,
          typename V>
 std::future<V &> DataFrame<I, H>::
@@ -1134,8 +1212,8 @@ single_act_visit_async(const char *name1,
                        V &visitor,
                        bool in_reverse) const  {
 
-    return (std::async(
-        std::launch::async,
+    return (thr_pool_.dispatch(
+        true,
         static_cast<V &(DataFrame::*)(const char *,
                                       const char *,
                                       const char *,

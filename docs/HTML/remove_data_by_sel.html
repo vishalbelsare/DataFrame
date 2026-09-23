@@ -1,5 +1,5 @@
 <!--
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -24,28 +24,40 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
 <!DOCTYPE html>
 <html>
-<body>
-  <table align="center" border="1">
+
+<head>
+<style>
+body {
+  background-image: linear-gradient(Azure, AliceBlue, GhostWhite, WhiteSmoke);
+}
+</style>
+</head>
+
+<body style="font-family: Georgia, serif">
+  <font size="+3">&#8592;</font> <a href="https://hosseinmoein.github.io/DataFrame/docs/HTML/DataFrame.html">Back to Documentations</a><BR><BR>
+  
+  <table border="1">
 
     <tr bgcolor="lightblue">
         <th>Signature</th> <th>Description</th> <th>Parameters</th>
 
     </tr>
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-template&lt;typename T, typename F, typename ... Ts&gt;
-void
-remove_data_by_sel(const char *name, F &amp;sel_functor) const;
-        </B></PRE></font>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; ">typename</span> T<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> F<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> Ts<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">void</span></span>
+<span class="line_wrapper">remove_data_by_sel<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>name<span style="color:#808030; ">,</span> F <span style="color:#808030; ">&amp;</span>sel_functor<span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">requires</span></span>
+<span class="line_wrapper">  <span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>invocable<span style="color:#800080; ">&lt;</span>F<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> IndexType <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> T <span style="color:#808030; ">&amp;</span><span style="color:#800080; ">&gt;</span> <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span></span>
+<span class="line_wrapper">  <span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>same_as<span style="color:#800080; ">&lt;</span><span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>invoke_result_t<span style="color:#800080; ">&lt;</span>F<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> IndexType <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> T <span style="color:#808030; ">&amp;</span><span style="color:#800080; ">&gt;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">bool</span><span style="color:#800080; ">&gt;</span><span style="color:#800080; ">;</span></span></pre>
       </td>
       <td width = "33.3%">
         It removes data rows by boolean filtering selection via the sel_functor (e.g. a functor, function, or lambda). Each element of the named column along with its corresponding index is passed to the sel_functor. If sel_functor returns true, that row will be removed.<BR>
         The signature of sel_fucntor:<BR>
         <I><PRE>
     bool ()(const IndexType &, const T &)
-        </PRE></I>
-        <B>NOTE</B>: If the selection logic results in empty column(s), the empty column(s) will _not_ be padded with NaN's. You can always call make_consistent() afterwards to make all columns into consistent length
+        </PRE></I><BR>
+        <B>NOTE</B>: If the selection logic results in empty column(s), the empty column(s) will _not_ be padded with NaN's. You can always call <a href="https://hosseinmoein.github.io/DataFrame/docs/HTML/make_consistent.html">make_consistent()</a> afterwards to make all columns into consistent length<BR>
+        <B>NOTE</B>: If this is called from a <I>PtrView</I>, the data is removed from the view but not from the original DataFrame<BR>
       <td>
         <B>T</B>: Type of the named column<BR>
         <B>F</B>: Type of the selecting functor<BR>
@@ -55,14 +67,15 @@ remove_data_by_sel(const char *name, F &amp;sel_functor) const;
       </td>
     </tr>
 
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-template&lt;typename T1, typename T2, typename F, typename ... Ts&gt;
-void
-remove_data_by_sel(const char *name1, const char *name2,
-                   F &amp;sel_functor) const;
-        </B></PRE></font>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; ">typename</span> T1<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> T2<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> F<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> Ts<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">void</span></span>
+<span class="line_wrapper">remove_data_by_sel<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>name1<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>name2<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">                   F <span style="color:#808030; ">&amp;</span>sel_functor<span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">requires</span></span>
+<span class="line_wrapper">  <span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>invocable<span style="color:#800080; ">&lt;</span>F<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> IndexType <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> T1 <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> T2 <span style="color:#808030; ">&amp;</span><span style="color:#800080; ">&gt;</span> <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span></span>
+<span class="line_wrapper">  <span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>same_as<span style="color:#808030; ">&lt;</span><span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>invoke_result_t<span style="color:#808030; ">&lt;</span>F<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> IndexType <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">                                       <span style="color:#800000; font-weight:bold; ">const</span> T1 <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> T2 <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&gt;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">bool</span><span style="color:#808030; ">&gt;</span><span style="color:#800080; ">;</span></span></pre>
       </td>
       <td>
         This does the same function as above remove_data_by_sel() but operating on two columns.<BR>
@@ -71,7 +84,7 @@ remove_data_by_sel(const char *name1, const char *name2,
     bool ()(const IndexType &, const T1 &, const T2 &)
         </PRE></I>
       </td>
-      <td>
+      <td width = "33.3%">
         <B>T1</B>: Type of the first named column<BR>
         <B>T2</B>: Type of the second named column<BR>
         <B>F</B>: Type of the selecting functor<BR>
@@ -82,16 +95,17 @@ remove_data_by_sel(const char *name1, const char *name2,
       </td>
     </tr>
 
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-template&lt;typename T1, typename T2, typename T3,
-         typename F, typename ... Ts&gt;
-void
-remove_data_by_sel(const char *name1, const char *name2,
-                   const char *name3,
-                   F &amp;sel_functor) const;
-        </B></PRE></font>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">template</span><span style="color:#800080; ">&lt;</span><span style="color:#800000; font-weight:bold; ">typename</span> T1<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> T2<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> T3<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> F<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">typename</span> <span style="color:#808030; ">.</span><span style="color:#808030; ">.</span><span style="color:#808030; ">.</span> Ts<span style="color:#800080; ">&gt;</span></span>
+<span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">void</span></span>
+<span class="line_wrapper">remove_data_by_sel<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>name1<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>name2<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> <span style="color:#800000; font-weight:bold; ">char</span> <span style="color:#808030; ">*</span>name3<span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">                   F <span style="color:#808030; ">&amp;</span>sel_functor<span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">requires</span></span>
+<span class="line_wrapper">  <span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>invocable<span style="color:#800080; ">&lt;</span>F<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> IndexType <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> T1 <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> T2 <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> T3 <span style="color:#808030; ">&amp;</span><span style="color:#800080; ">&gt;</span> <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&amp;</span></span>
+<span class="line_wrapper">  <span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>same_as<span style="color:#808030; ">&lt;</span><span style="color:#666616; ">std</span><span style="color:#800080; ">::</span>invoke_result_t<span style="color:#808030; ">&lt;</span>F<span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> IndexType <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">                                       <span style="color:#800000; font-weight:bold; ">const</span> T1 <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">const</span> T2 <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">,</span></span>
+<span class="line_wrapper">                                       <span style="color:#800000; font-weight:bold; ">const</span> T3 <span style="color:#808030; ">&amp;</span><span style="color:#808030; ">&gt;</span><span style="color:#808030; ">,</span> <span style="color:#800000; font-weight:bold; ">bool</span><span style="color:#808030; ">&gt;</span><span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
         This does the same function as above remove_data_by_sel() but operating on three columns.<BR>
@@ -100,7 +114,7 @@ remove_data_by_sel(const char *name1, const char *name2,
     bool ()(const IndexType &, const T1 &, const T2 &, const T3 &)
         </PRE></I>
       </td>
-      <td>
+      <td width = "33.3%">
         <B>T1</B>: Type of the first named column<BR>
         <B>T2</B>: Type of the second named column<BR>
         <B>T3</B>: Type of the third named column<BR>
@@ -115,7 +129,7 @@ remove_data_by_sel(const char *name1, const char *name2,
 
   </table>
 
-  <pre style='color:#000000;background:#ffffff;'><span style='color:#800000; font-weight:bold; '>static</span> <span style='color:#800000; font-weight:bold; '>void</span> test_remove_data_by_sel<span style='color:#808030; '>(</span><span style='color:#808030; '>)</span>  <span style='color:#800080; '>{</span>
+  <pre style='color:#000000;background:#ffffff00;'><span style='color:#800000; font-weight:bold; '>static</span> <span style='color:#800000; font-weight:bold; '>void</span> test_remove_data_by_sel<span style='color:#808030; '>(</span><span style='color:#808030; '>)</span>  <span style='color:#800080; '>{</span>
 
     <span style='color:#666616; '>std</span><span style='color:#800080; '>::</span><span style='color:#603000; '>cout</span> <span style='color:#808030; '>&lt;</span><span style='color:#808030; '>&lt;</span> <span style='color:#800000; '>"</span><span style='color:#0f69ff; '>\n</span><span style='color:#0000e6; '>Testing remove_data_by_sel() ...</span><span style='color:#800000; '>"</span> <span style='color:#808030; '>&lt;</span><span style='color:#808030; '>&lt;</span> <span style='color:#666616; '>std</span><span style='color:#800080; '>::</span><span style='color:#603000; '>endl</span><span style='color:#800080; '>;</span>
 
@@ -190,8 +204,8 @@ remove_data_by_sel(const char *name1, const char *name2,
 </pre>
   <!--Created using ToHtml.com on 2020-05-05 20:39:12 UTC -->
 
-  <img src="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg?raw=true" alt="C++ DataFrame"
-       width="200" height="150" style="float:right"/>
+  <BR><img src="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg?raw=true" alt="C++ DataFrame"
+       width="200" height="200" style="float:right"/>
 
 </body>
 </html>

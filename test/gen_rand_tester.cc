@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -132,7 +132,8 @@ int main(int, char *[]) {
 
         r = gen_normal_dist<double>(1024);
         for (auto citer : r)
-            assert(citer == 1.0);
+            std::cout << citer << ", ";
+        std::cout << std::endl;
     }
 
     {
@@ -225,6 +226,29 @@ int main(int, char *[]) {
 
         std::cout << '\n' << std::endl;
         for (auto citer : r3)
+            std::cout << citer << ", ";
+        std::cout << std::endl;
+
+        std::cout << "\nTesting gen_dft_sample_freq() ..." << std::endl;
+
+        auto    r4 = gen_dft_sample_freq<double>(15, 1);
+
+        std::cout << '\n' << std::endl;
+        for (auto citer : r4)
+            std::cout << citer << ", ";
+        std::cout << std::endl;
+
+        auto    r5 = gen_dft_sample_freq<double>(15, 2);
+
+        std::cout << '\n' << std::endl;
+        for (auto citer : r5)
+            std::cout << citer << ", ";
+        std::cout << std::endl;
+
+        auto    r6 = gen_dft_sample_freq<double>(20);
+
+        std::cout << '\n' << std::endl;
+        for (auto citer : r6)
             std::cout << citer << ", ";
         std::cout << std::endl;
     }

@@ -1,5 +1,5 @@
 <!--
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -24,23 +24,34 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
 <!DOCTYPE html>
 <html>
-<body>
-  <table align="center" border="1">
+
+<head>
+<style>
+body {
+  background-image: linear-gradient(Azure, AliceBlue, GhostWhite, WhiteSmoke);
+}
+</style>
+</head>
+
+<body style="font-family: Georgia, serif">
+  <font size="+3">&#8592;</font> <a href="https://hosseinmoein.github.io/DataFrame/docs/HTML/DataFrame.html">Back to Documentations</a><BR><BR>
+  
+  <table border="1">
 
     <tr bgcolor="lightblue">
       <th>Signature</th> <th>Description</th>
     </tr>
-    <tr bgcolor="lightgrey">
-      <td bgcolor="maroon"> <font color="white">
-        <PRE><B>
-enum class mean_type : unsigned char  {
-
-    arithmetic = 1, // sum(value) / count
-    weighted = 2,   // sum(weighted value) / ((count * (count + 1)) / 2)
-    geometric = 3,  // exp(log(sum(value)) / count)
-    harmonic = 4,   // count / sum(1 / value)
-    quadratic = 5,  // sqrt(sum(value * value) / count)
-}; </B></PRE> </font>
+    <tr bgcolor="Azure">
+      <td>
+<pre class="code_syntax" style="color:#000000;background:#ffffff00;"><span class="line_wrapper"><span style="color:#800000; font-weight:bold; ">enum</span> <span style="color:#800000; font-weight:bold; ">class</span> mean_type <span style="color:#800080; ">:</span> <span style="color:#800000; font-weight:bold; ">unsigned</span> <span style="color:#800000; font-weight:bold; ">char</span>  <span style="color:#800080; ">{</span></span>
+<span class="line_wrapper"></span>
+<span class="line_wrapper">    arithmetic <span style="color:#808030; ">=</span> <span style="color:#008c00; ">1</span><span style="color:#808030; ">,</span> <span style="color:#696969; ">// sum(value) / count</span></span>
+<span class="line_wrapper">    weighted <span style="color:#808030; ">=</span> <span style="color:#008c00; ">2</span><span style="color:#808030; ">,</span>   <span style="color:#696969; ">// sum(weighted value) / ((count * (count + 1)) / 2)</span></span>
+<span class="line_wrapper">    geometric <span style="color:#808030; ">=</span> <span style="color:#008c00; ">3</span><span style="color:#808030; ">,</span>  <span style="color:#696969; ">// exp(log(sum(value)) / count)</span></span>
+<span class="line_wrapper">    harmonic <span style="color:#808030; ">=</span> <span style="color:#008c00; ">4</span><span style="color:#808030; ">,</span>   <span style="color:#696969; ">// count / sum(1 / value)</span></span>
+<span class="line_wrapper">    quadratic <span style="color:#808030; ">=</span> <span style="color:#008c00; ">5</span><span style="color:#808030; ">,</span>  <span style="color:#696969; ">// sqrt(sum(value * value) / count)</span></span>
+<span class="line_wrapper"><span style="color:#800080; ">}</span><span style="color:#800080; ">;</span></span>
+<span class="line_wrapper"></span></pre>
       </td>
       <td>
         This specifies the type of mean/average calculation
@@ -48,8 +59,8 @@ enum class mean_type : unsigned char  {
     </tr>
   </table>
 
-  <img src="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg?raw=true" alt="C++ DataFrame"
-       width="200" height="150" style="float:right"/>
+  <BR><img src="https://github.com/hosseinmoein/DataFrame/blob/master/docs/LionLookingUp.jpg?raw=true" alt="C++ DataFrame"
+       width="200" height="200" style="float:right"/>
 
 </body>
 </html>

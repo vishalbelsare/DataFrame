@@ -1,0 +1,6517 @@
+/*
+Copyright (c) 2019-2026, Hossein Moein
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright
+  notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+* Neither the name of Hossein Moein and/or the DataFrame nor the
+  names of its contributors may be used to endorse or promote products
+  derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL Hossein Moein BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+#include <DataFrame/DataFrame.h>
+#include <DataFrame/DataFrameFinancialVisitors.h>
+#include <DataFrame/DataFrameMLVisitors.h>
+#include <DataFrame/DataFrameStatsVisitors.h>
+#include <DataFrame/DataFrameTransformVisitors.h>
+#include <DataFrame/RandGen.h>
+
+#include <cassert>
+#include <cmath>
+#include <cstdio>
+#include <iostream>
+#include <ranges>
+#include <string>
+
+using namespace hmdf;
+
+// A DataFrame with ulong index type
+//
+using ULDataFrame = StdDataFrame<unsigned long>;
+using MyDataFrame = StdDataFrame256<unsigned long>;
+using MyStdDataFrame = StdDataFrame<unsigned long>;
+using StrDataFrame = StdDataFrame<std::string>;
+using DTDataFrame = StdDataFrame256<DateTime>;
+using StrDataFrame2 = StdDataFrame256<std::string>;
+
+template<typename T>
+using StlVecType = typename MyDataFrame::template StlVecType<T>;
+
+// ----------------------------------------------------------------------------
+
+static void test_starts_with()  {
+
+    std::cout << "\nTesting starts_with( ) ..." << std::endl;
+
+    std::vector<std::string>                idx =
+        { "XXDnh\1", "XXD974h", "fbbgd", std::string("XXDoiendg\0\0", 11),
+          "yehtfg", "mnbvcd", "dfgsret", "jhnbdfg", "XXDomagdfert",
+          "XXmj;'[-09", "XDimnaxcdf3", "207652234", "XXD", "XX" };
+    std::vector<std::string>                s1 =
+        { "XXDnh\1", "XXD974h", "fbbgd", std::string("XXDoiendg\0\0", 11),
+          "yehtfg", "mnbvcd", "dfgsret", "jhnbdfg", "XXDomagdfert",
+          "XXmj;'[-09", "XDimnaxcdf3", "207652234", "XXD", "XX" };
+    std::vector<std::vector<unsigned char>> v1 =
+        { { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 8, 9, 10 },
+          { 100 },
+          { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 23, 30, 31, 32, 100 } };
+    std::vector<double>                     d3 =
+        { 15, 16, 15, 18, 19, 16, 21, 0.34, 1.56, 0.34, 2.3, 0.34, 19.0, 10 };
+    std::vector<int>                        i1 = { 22, 23, 24, 25, 99 };
+    StrDataFrame                            df;
+
+    df.load_data(std::move(idx),
+                 std::make_pair("str_col", s1),
+                 std::make_pair("col2", v1),
+                 std::make_pair("col_3", d3),
+                 std::make_pair("col_4", i1));
+
+    const auto  res1 = df.starts_with<std::string>("str_col", "XXD");
+
+    {
+        std::vector<char>  out_res =
+            { 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0 };
+
+        assert(res1 == out_res);
+    }
+
+    const auto  res2 =
+        df.starts_with<std::vector<unsigned char>>("col2", { 8, 9, 10, 11 });
+
+    {
+         std::vector<char>  out_res =
+            { 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 };
+
+        assert(res2 == out_res);
+    }
+
+    const auto  res3 = df.starts_with<std::string>(DF_INDEX_COL_NAME, "XXD");
+
+    {
+        std::vector<char>  out_res =
+            { 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0 };
+
+        assert(res3 == out_res);
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_ends_with()  {
+
+    std::cout << "\nTesting ends_with( ) ..." << std::endl;
+
+    std::vector<std::string>                idx =
+        { "nh\1XXD", "974hXXD", "fbbgd", std::string("oiendg\0\0XXD", 11),
+          "yehtfg", "mnbvcd", "dfgsret", "jhnbdfg", "omagdfertXXD",
+          "XXmj;'[-09", "XDimnaxcdf3", "207652234", "XXD", "XX" };
+    std::vector<std::string>                s1 =
+        { "nh\1XXD", "974hXXD", "fbbgd", std::string("oiendg\0\0XXD", 11),
+          "yehtfg", "mnbvcd", "dfgsret", "jhnbdfg", "omagdfertXXD",
+          "XXmj;'[-09", "XDimnaxcdf3", "207652234", "XXD", "XX" };
+    std::vector<std::vector<unsigned char>> v1 =
+        { { 12, 13, 14, 20, 22, 23, 30, 31, 32, 100, 8, 9, 10, 11 },
+          { 12, 13, 14, 20, 22, 23, 30, 31, 32, 100, 8, 9, 10, 11 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 12, 13, 14, 20, 22, 23, 30, 31, 32, 100, 8, 9, 10, 11 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 8, 9, 10 },
+          { 100 },
+          { 12, 13, 14, 20, 22, 23, 30, 31, 32, 100, 8, 9, 10, 11 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 23, 30, 31, 32, 100 } };
+    std::vector<double>                     d3 =
+        { 15, 16, 15, 18, 19, 16, 21, 0.34, 1.56, 0.34, 2.3, 0.34, 19.0, 10 };
+    std::vector<int>                        i1 = { 22, 23, 24, 25, 99 };
+    StrDataFrame                            df;
+
+    df.load_data(std::move(idx),
+                 std::make_pair("str_col", s1),
+                 std::make_pair("col2", v1),
+                 std::make_pair("col_3", d3),
+                 std::make_pair("col_4", i1));
+
+    const auto  res1 = df.ends_with<std::string>("str_col", "XXD");
+
+    {
+        std::vector<char>  out_res =
+            { 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0 };
+
+        assert(res1 == out_res);
+    }
+
+    const auto  res2 =
+        df.ends_with<std::vector<unsigned char>>("col2", { 8, 9, 10, 11 });
+
+    {
+         std::vector<char>  out_res =
+            { 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 };
+
+        assert(res2 == out_res);
+    }
+
+    const auto  res3 = df.ends_with<std::string>(DF_INDEX_COL_NAME, "XXD");
+
+    {
+        std::vector<char>  out_res =
+            { 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0 };
+
+        assert(res3 == out_res);
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_in_between()  {
+
+    std::cout << "\nTesting in_between( ) ..." << std::endl;
+
+    StlVecType<unsigned long>               idx =
+        { 123450, 123451, 123452, 123453, 123454, 123455, 123456,
+          123457, 123458, 123459, 123460, 123461, 123462, 123466 };
+    StlVecType<std::string>                 s1 =
+        { "XXDnh\1", "XXD974h", "fbbgd", std::string("XXDoiendg\0\0", 11),
+          "yehtfg", "mnbvcd", "dfgsret", "jhnbdfg", "XXDomagdfert",
+          "XXmj;'[-09", "XDimnaxcdf3", "207652234", "XXD", "XX" };
+    StlVecType<StlVecType<unsigned char>>   v1 =
+        { { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 8, 9, 10 },
+          { 100 },
+          { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 100 },
+          { 23, 30, 31, 32, 100 } };
+    StlVecType<double>                      d3 =
+        { 15, 16, 15, 18, 19, 16, 21, 0.34, 1.56, 0.34, 2.3, 0.34, 19.0, 10 };
+    StlVecType<int>                         i1 = { 22, 23, 24, 25, 99 };
+    MyDataFrame                             df;
+
+    df.load_data(std::move(idx),
+                 std::make_pair("str_col", s1),
+                 std::make_pair("col2", v1),
+                 std::make_pair("col_3", d3),
+                 std::make_pair("col_4", i1));
+
+    {
+        const auto  res = df.in_between<double>("col_3", 15.0, 19.0);
+
+        StlVecType<char>    out_res =
+            { 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+        assert(res == out_res);
+    }
+
+    {
+        const auto  res =
+            df.in_between<unsigned long>(DF_INDEX_COL_NAME, 123453, 123460);
+
+        StlVecType<char>    out_res =
+            { 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0 };
+
+        assert(res == out_res);
+    }
+
+    {
+        const auto  res =
+            df.in_between<unsigned long>(DF_INDEX_COL_NAME, 123453, 123460,
+                                         inclusiveness::end);
+
+        StlVecType<char>    out_res =
+            { 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0 };
+
+        assert(res == out_res);
+    }
+
+    {
+        const auto  res =
+            df.in_between<unsigned long>(DF_INDEX_COL_NAME, 123453, 123460,
+                                         inclusiveness::both);
+
+        StlVecType<char>    out_res =
+            { 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0 };
+
+        assert(res == out_res);
+    }
+
+    {
+        const auto  res =
+            df.in_between<unsigned long>(DF_INDEX_COL_NAME, 123453, 123460,
+                                         inclusiveness::neither);
+
+        StlVecType<char>    out_res =
+            { 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0 };
+
+        assert(res == out_res);
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_peaks()  {
+
+    std::cout << "\nTesting peaks( ) ..." << std::endl;
+
+    MyDataFrame                df;
+    StlVecType<unsigned long>  idxvec =
+        { 1UL, 2UL, 3UL, 10UL, 5UL, 7UL, 8UL, 12UL, 9UL, 12UL, 10UL, 13UL,
+          10UL, 15UL, 14UL };
+    StlVecType<double>         dblvec =
+        { 0.0, 15.0, -14.0, 2.0, 1.0, 12.0, 11.0, 8.0, 7.0, 6.0, 5.0, 4.0,
+          3.0, 9.0, 10.0};
+    StlVecType<double>         dblvec2 =
+        { 100.0, 101.0, 102.0, 103.0, 104.0, 103.9, 106.55, 106.34, 1.8,
+          111.0, 112.0, 111.5, 114.0, 115.0, 116.0};
+    StlVecType<std::string>    strvec =
+        { "zz", "bb", "cc", "ww", "ee", "ff", "gg", "hh", "ii", "jj", "kk",
+          "ll", "mm", "nn", "oo" };
+
+    df.load_data(std::move(idxvec),
+                 std::make_pair("dbl_col", dblvec),
+                 std::make_pair("dbl_col_2", dblvec2),
+                 std::make_pair("str_col", strvec));
+
+    const auto  res1 = df.peaks<double>("dbl_col_2");
+
+    {
+        StlVecType<char>    out_res =
+            { 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0 };
+
+        assert(res1 == out_res);
+    }
+
+    const auto  res2 = df.peaks<unsigned long>(DF_INDEX_COL_NAME);
+
+    {
+        StlVecType<char>    out_res =
+            { 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0 };
+
+        assert(res2 == out_res);
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_valleys()  {
+
+    std::cout << "\nTesting valleys( ) ..." << std::endl;
+
+    MyDataFrame                df;
+    StlVecType<unsigned long>  idxvec =
+        { 1UL, 2UL, 3UL, 10UL, 5UL, 7UL, 8UL, 12UL, 9UL, 12UL, 10UL, 13UL,
+          10UL, 15UL, 14UL };
+    StlVecType<double>         dblvec =
+        { 0.0, 15.0, -14.0, 2.0, 1.0, 12.0, 11.0, 8.0, 7.0, 6.0, 5.0, 4.0,
+          3.0, 9.0, 10.0};
+    StlVecType<double>         dblvec2 =
+        { 100.0, 101.0, 102.0, 103.0, 104.0, 103.9, 106.55, 106.34, 1.8,
+          111.0, 112.0, 111.5, 114.0, 115.0, 116.0};
+    StlVecType<std::string>    strvec =
+        { "zz", "bb", "cc", "ww", "ee", "ff", "gg", "hh", "ii", "jj", "kk",
+          "ll", "mm", "nn", "oo" };
+
+    df.load_data(std::move(idxvec),
+                 std::make_pair("dbl_col", dblvec),
+                 std::make_pair("dbl_col_2", dblvec2),
+                 std::make_pair("str_col", strvec));
+    df.load_column("dbl_col_2_mask_1", df.valleys<double>("dbl_col_2"));
+    df.load_column("dbl_col_2_mask_2", df.valleys<double>("dbl_col_2", 2));
+    df.load_column("dbl_col_2_mask_3", df.valleys<double>("dbl_col_2", 3));
+
+    {
+        StlVecType<char>    out_res1 =
+            { 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0 };
+        StlVecType<char>    out_res2 =
+            { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 };
+        StlVecType<char>    out_res3 =
+            { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 };
+
+        assert((df.get_column<char>("dbl_col_2_mask_1") == out_res1));
+        assert((df.get_column<char>("dbl_col_2_mask_2") == out_res2));
+        assert((df.get_column<char>("dbl_col_2_mask_3") == out_res3));
+    }
+
+    df.load_column("index_mask", df.valleys<double>(DF_INDEX_COL_NAME));
+    {
+        StlVecType<char>    out_res =
+            { 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0 };
+
+        assert((df.get_column<char>("index_mask") == out_res));
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_apply()  {
+
+    std::cout << "\nTesting apply( ) ..." << std::endl;
+
+    MyDataFrame                 df;
+    StlVecType<unsigned long>   idxvec =
+        { 1UL, 2UL, 3UL, 10UL, 5UL, 7UL, 8UL, 12UL, 9UL, 12UL, 10UL, 13UL,
+          10UL, 15UL, 14UL };
+    StlVecType<double>          dblvec =
+        { 0.0, 15.0, -14.0, 2.0, 1.0, -12.0, 11.0, 8.0, 7.0, 0.0, 5.0, 4.0,
+          3.0, 9.0, -10.0 };
+    StlVecType<double>          dblvec2 =
+        { 1.0, 0.05, 0.28, 0.31, 0.01, 0.68, 0.12, 1, 0.98,
+          0.9, 0.81, 0.82, 0.777, 0.34, 0.25 };
+    StlVecType<std::string>     strvec =
+        { "zz", "bb", "zz", "ww", "ee", "ff", "gg", "hh", "zz", "jj", "kk",
+          "ll", "mm", "nn", "zz" };
+
+    df.load_data(std::move(idxvec),
+                 std::make_pair("dbl_col", dblvec),
+                 std::make_pair("dbl_col_2", dblvec2),
+                 std::make_pair("str_col", strvec));
+
+    auto    softp = [](const unsigned long &, double &val) -> bool  {
+        val = std::log(1.0 + std::exp(val * 0.5)) / 0.5;
+        return (true);
+    };
+
+    df.apply<double>("dbl_col", softp);
+
+    const auto  &dbl_col = df.get_column<double>("dbl_col");
+
+    {
+        StlVecType<double>  out_res =
+            { 1.38629, 15.0011, 0.00182293, 2.62652, 1.94815, 0.00495137,
+              11.0082, 8.0363, 7.0595, 1.38629, 5.15778, 4.25386, 3.40283,
+              9.0221, 0.0134307 };
+
+        for (const auto &[ans, act]
+                 : std::ranges::views::zip(out_res, dbl_col))
+            assert(std::fabs(ans - act) < 0.0001);
+    }
+
+    auto    haphaz =
+        [](const unsigned long &,
+           double &val1,
+           double &val2,
+           std::string &val3) -> bool  {
+            if (val3 == "zz")
+                val1 += val2;
+            return (true);
+        };
+
+    df.apply<double, double, std::string>
+        ("dbl_col", "dbl_col_2", "str_col", haphaz);
+
+    {
+        StlVecType<double>  out_res =
+            { 2.38629, 15.0011, 0.281823, 2.62652, 1.94815, 0.00495137,
+              11.0082, 8.0363, 8.0395, 1.38629, 5.15778, 4.25386, 3.40283,
+              9.0221, 0.263431 };
+
+        for (const auto &[ans, act]
+                 : std::ranges::views::zip(out_res, dbl_col))
+            assert(std::fabs(ans - act) < 0.0001);
+    }
+
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_truncate()  {
+
+    std::cout << "\nTesting truncate( ) ..." << std::endl;
+
+    MyDataFrame                df;
+    StlVecType<unsigned long>  idxvec =
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+    StlVecType<double>         dblvec =
+        { 0.0, 15.0, -14.0, 2.0, 1.0, 12.0, 11.0, 8.0, 7.0, 6.0, 5.0, 4.0,
+          3.0, 9.0, 10.0};
+    StlVecType<double>         dblvec2 =
+        { 100.0, 101.0, 102.0, 103.0, 104.0, 103.9, 106.55, 106.34, 1.8,
+          111.0, 112.0, 111.5, 114.0, 115.0, 116.0};
+    StlVecType<std::string>    strvec =
+        { "zz", "bb", "cc", "ww", "ee", "ff", "gg", "hh", "ii", "jj", "kk",
+          "ll", "mm", "nn", "oo" };
+    StlVecType<int>            intvec = { 1, 2, 3, 4, 5 };
+
+    df.load_data(std::move(idxvec),
+                 std::make_pair("dbl_col", dblvec),
+                 std::make_pair("dbl_col_2", dblvec2),
+                 std::make_pair("str_col", strvec));
+    df.load_column("int_col",
+                   std::move(intvec),
+                   nan_policy::dont_pad_with_nans);
+
+    {
+        auto    df2 = df;
+
+        StlVecType<unsigned long>  index = { 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+        StlVecType<double>         dbl_col = { 2, 1, 12, 11, 8, 7, 6, 5, 4 };
+        StlVecType<double>         dbl_col_2 =
+            { 103, 104, 103.9, 106.55, 106.34, 1.8, 111, 112, 111.5 };
+        StlVecType<std::string>    str_col =
+            { "ww", "ee", "ff", "gg", "hh", "ii", "jj", "kk", "ll" };
+        StlVecType<int>            int_col = { 4, 5 };
+
+        df2.truncate<double, std::string, int>(4, 12);
+        assert(df2.get_index() == index);
+        assert(df2.get_column<double>("dbl_col") == dbl_col);
+        assert(df2.get_column<double>("dbl_col_2") == dbl_col_2);
+        assert(df2.get_column<std::string>("str_col") == str_col);
+        assert(df2.get_column<int>("int_col") == int_col);
+    }
+    {
+        auto    df2 = df;
+
+        StlVecType<unsigned long>  index =
+            { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+        StlVecType<double>         dbl_col =
+            { 0, 15, -14, 2, 1, 12, 11, 8, 7, 6, 5, 4 };
+        StlVecType<double>         dbl_col_2 =
+            { 100, 101, 102, 103, 104, 103.9, 106.55, 106.34, 1.8, 111, 112,
+              111.5 };
+        StlVecType<std::string>    str_col =
+            { "zz", "bb", "cc", "ww", "ee", "ff", "gg", "hh", "ii", "jj",
+              "kk", "ll" };
+        StlVecType<int>            int_col = { 1, 2, 3, 4, 5 };
+
+        df2.truncate<double, std::string, int>(1, 12);
+        assert(df2.get_index() == index);
+        assert(df2.get_column<double>("dbl_col") == dbl_col);
+        assert(df2.get_column<double>("dbl_col_2") == dbl_col_2);
+        assert(df2.get_column<std::string>("str_col") == str_col);
+        assert(df2.get_column<int>("int_col") == int_col);
+    }
+    {
+        auto    df2 = df;
+
+        StlVecType<unsigned long>  index =
+            { 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+        StlVecType<double>         dbl_col =
+            { 2, 1, 12, 11, 8, 7, 6, 5, 4, 3, 9, 10 };
+        StlVecType<double>         dbl_col_2 =
+            { 103, 104, 103.9, 106.55, 106.34, 1.8, 111, 112, 111.5, 114,
+              115, 116 };
+        StlVecType<std::string>    str_col =
+            { "ww", "ee", "ff", "gg", "hh", "ii", "jj", "kk", "ll", "mm",
+              "nn", "oo" };
+        StlVecType<int>            int_col = { 4, 5 };
+
+        df2.truncate<double, std::string, int>(4, 15);
+        assert(df2.get_index() == index);
+        assert(df2.get_column<double>("dbl_col") == dbl_col);
+        assert(df2.get_column<double>("dbl_col_2") == dbl_col_2);
+        assert(df2.get_column<std::string>("str_col") == str_col);
+        assert(df2.get_column<int>("int_col") == int_col);
+    }
+    {
+        auto    df2 = df;
+
+        StlVecType<unsigned long>  index =
+            { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+        StlVecType<double>         dbl_col =
+            { 0, 15, -14, 2, 1, 12, 11, 8, 7, 6, 5, 4, 3, 9, 10 };
+        StlVecType<double>         dbl_col_2 =
+            { 100, 101, 102, 103, 104, 103.9, 106.55, 106.34, 1.8, 111, 112,
+              111.5, 114, 115, 116 };
+        StlVecType<std::string>    str_col =
+            { "zz", "bb", "cc", "ww", "ee", "ff", "gg", "hh", "ii", "jj",
+              "kk", "ll", "mm", "nn", "oo" };
+        StlVecType<int>            int_col = { 1, 2, 3, 4, 5 };
+
+        df2.truncate<double, std::string, int>(0, 16);
+    }
+    {
+        auto    df2 = df;
+
+        StlVecType<unsigned long>  index = { 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+        StlVecType<double>         dbl_col = { 11, 8, 7, 6, 5, 4, 3, 9, 10 };
+        StlVecType<double>         dbl_col_2 =
+            { 106.55, 106.34, 1.8, 111, 112, 111.5, 114, 115, 116 };
+        StlVecType<std::string>    str_col =
+            { "gg", "hh", "ii", "jj", "kk", "ll", "mm", "nn", "oo" };
+        StlVecType<int>            int_col = {  };
+
+        df2.truncate<double, std::string, int>(7, 15);
+        assert(df2.get_index() == index);
+        assert(df2.get_column<double>("dbl_col") == dbl_col);
+        assert(df2.get_column<double>("dbl_col_2") == dbl_col_2);
+        assert(df2.get_column<std::string>("str_col") == str_col);
+        assert(df2.get_column<int>("int_col") == int_col);
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_load_column()  {
+
+    std::cout << "\nTesting load_column( ) ..." << std::endl;
+
+    MyDataFrame                 df;
+    StlVecType<unsigned long>   idxvec =
+        { 1UL, 2UL, 3UL, 10UL, 5UL, 7UL, 8UL, 12UL, 9UL, 12UL, 10UL, 13UL,
+          10UL, 15UL, 14UL };
+    StlVecType<double>          dblvec =
+        { 0.0, 15.0, -14.0, 2.0, 1.0, -12.0, 11.0, 8.0, 7.0, 0.0, 5.0, 4.0,
+          3.0, 9.0, -10.0 };
+    StlVecType<double>          dblvec2 =
+        { 1.0, 0.05, 0.28, 0.31, 0.01, 0.68, 0.12, 1, 0.98,
+          0.9, 0.81, 0.82, 0.777, 0.34, 0.25 };
+    StlVecType<std::string>     strvec =
+        { "zz", "bb", "zz", "ww", "ee", "ff", "gg", "hh", "zz", "jj", "kk",
+          "ll", "mm", "nn", "zz" };
+
+    df.load_data(std::move(idxvec),
+                 std::make_pair("dbl_col", dblvec),
+                 std::make_pair("dbl_col_2", dblvec2),
+                 std::make_pair("str_col", strvec));
+
+    auto    lbd = [](const unsigned long &, const double &val) -> double  {
+        return (val * 2.0);
+    };
+
+    df.load_column<double, double>("new_dbl_col", "dbl_col", std::move(lbd));
+    {
+        StlVecType<double>  new_dbl_col =
+            { 0, 30, -28, 4, 2, -24, 22, 16, 14, 0, 10, 8, 6, 18, -20 };
+
+        assert((df.get_column<double>("new_dbl_col") == new_dbl_col));
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_explode()  {
+
+    std::cout << "\nTesting load_explode( ) ..." << std::endl;
+
+    DTDataFrame    df;
+
+    try  {
+        df.read("AAPL_10dBucketWithMaps_small.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    df.write<std::ostream,
+             double,
+             long,
+             std::map<std::string, double>,
+             std::unordered_map<std::string, double>,
+             std::vector<std::string>,
+             std::set<double>,
+             std::set<std::string>>
+        (std::cout, io_format::csv2);
+
+    auto exploded1 = df.explode<std::unordered_map<std::string, double>,
+                                double,
+                                long,
+                                std::map<std::string, double>,
+                                std::vector<std::string>,
+                                std::set<double>,
+                                std::set<std::string>>("Unordered Map");
+
+    std::cout << "\n\n";
+    exploded1.write<std::ostream,
+                    std::pair<std::string, double>,
+                    double,
+                    long,
+                    std::map<std::string, double>,
+                    std::vector<std::string>,
+                    std::set<double>,
+                    std::set<std::string>>
+        (std::cout, io_format::csv2);
+
+    auto exploded2 = df.explode<std::map<std::string, double>,
+                                double,
+                                long,
+                                std::vector<std::string>,
+                                std::unordered_map<std::string, double>,
+                                std::set<double>,
+                                std::set<std::string>>("Map 1");
+
+    std::cout << "\n\n";
+    exploded2.write<std::ostream,
+                    std::pair<std::string, double>,
+                    double,
+                    long,
+                    std::unordered_map<std::string, double>,
+                    std::vector<std::string>,
+                    std::set<double>,
+                    std::set<std::string>>
+        (std::cout, io_format::csv2);
+
+    auto exploded3 = df.explode<std::set<double>,
+                                double,
+                                long,
+                                std::vector<std::string>,
+                                std::map<std::string, double>,
+                                std::unordered_map<std::string, double>,
+                                std::set<std::string>>("Double Set");
+
+    std::cout << "\n\n";
+    exploded3.write<std::ostream,
+                    double,
+                    long,
+                    std::map<std::string, double>,
+                    std::unordered_map<std::string, double>,
+                    std::vector<std::string>,
+                    std::set<std::string>>
+        (std::cout, io_format::csv2);
+
+    auto exploded4 = df.explode<std::vector<std::string>,
+                                double,
+                                long,
+                                std::map<std::string, double>,
+                                std::set<double>,
+                                std::unordered_map<std::string, double>,
+                                std::set<std::string>>("Str Vec");
+
+    std::cout << "\n\n";
+    exploded4.write<std::ostream,
+                    std::string,
+                    double,
+                    long,
+                    std::map<std::string, double>,
+                    std::unordered_map<std::string, double>,
+                    std::set<double>,
+                    std::set<std::string>>
+        (std::cout, io_format::csv2);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_read_write_pairs()  {
+
+    std::cout << "\nTesting read_write_pairs ..." << std::endl;
+
+    MyDataFrame df;
+
+    try  {
+        df.read("sample_data_2.csv", io_format::csv);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    df.write<std::ostream,
+             unsigned long,
+             int,
+             std::string,
+             double,
+             bool,
+             std::pair<std::string, std::string>,
+             std::pair<double, double>,
+             std::pair<std::string, double>>
+        (std::cout, io_format::csv);
+
+    df.write<unsigned long,
+             int,
+             std::string,
+             double,
+             bool,
+             std::pair<std::string, std::string>,
+             std::pair<double, double>,
+             std::pair<std::string, double>>
+        ("./tmp_sample_data_2.csv", io_format::csv2);
+    df.write<unsigned long,
+             int,
+             std::string,
+             double,
+             bool,
+             std::pair<std::string, std::string>,
+             std::pair<double, double>,
+             std::pair<std::string, double>>
+        ("./tmp_sample_data_2.dat", io_format::binary);
+
+    MyDataFrame df2;
+
+    df2.read("./tmp_sample_data_2.csv", io_format::csv2);
+    assert(df.get_index() == df2.get_index());
+    assert((df.get_column<int>("xint_col_2") ==
+                df2.get_column<int>("xint_col_2")));
+    assert((df.get_column<std::string>("str_col_2") ==
+                df2.get_column<std::string>("str_col_2")));
+    assert((df.get_column<unsigned long>("ul_col_2") ==
+                df2.get_column<unsigned long>("ul_col_2")));
+    assert((
+ df.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[0] ==
+ df2.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[0]));
+    assert((
+ df.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[1] ==
+ df2.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[1]));
+    assert((
+ df.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[2] ==
+ df2.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[2]));
+    assert((
+ df.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[3] ==
+ df2.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[3]));
+    assert((
+ df.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[4] ==
+ df2.get_column<std::pair<std::string, std::string>>("str_str_pair_col")[4]));
+    assert((
+ df.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[0] ==
+ df2.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[0]));
+    assert((std::isnan(df.get_column<std::pair<double, double>>
+                              ("dbl_dbl_pair_col")[1].first)));
+    assert((std::isnan(df.get_column<std::pair<double, double>>
+                              ("dbl_dbl_pair_col")[1].second)));
+    assert((std::isnan(df2.get_column<std::pair<double, double>>
+                               ("dbl_dbl_pair_col")[1].first)));
+    assert((std::isnan(df2.get_column<std::pair<double, double>>
+                               ("dbl_dbl_pair_col")[1].second)));
+    assert((std::isnan(df.get_column<std::pair<double, double>>
+                              ("dbl_dbl_pair_col")[2].first)));
+    assert((std::isnan(df2.get_column<std::pair<double, double>>
+                               ("dbl_dbl_pair_col")[2].first)));
+    assert((
+ df.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[2].second ==
+ df2.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[2].second));
+    assert((std::isnan(df.get_column<std::pair<double, double>>
+                              ("dbl_dbl_pair_col")[3].second)));
+    assert((std::isnan(df2.get_column<std::pair<double, double>>
+                               ("dbl_dbl_pair_col")[3].second)));
+    assert((
+ df.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[3].first ==
+ df2.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[3].first));
+    assert((
+ df.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[4] ==
+ df2.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[4]));
+
+    assert((
+ df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[0] ==
+ df2.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[0]));
+    assert((
+ df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[1].first ==
+ df2.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[1].first));
+    assert((std::isnan(df.get_column<std::pair<std::string, double>>
+                              ("str_dbl_pair_col")[1].second)));
+    assert((std::isnan(df2.get_column<std::pair<std::string, double>>
+                              ("str_dbl_pair_col")[1].second)));
+    assert((
+ df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[2].first ==
+ df2.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[2].first));
+    assert((
+ df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[2].second ==
+ df2.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[2].second));
+    assert((std::isnan(df.get_column<std::pair<std::string, double>>
+                              ("str_dbl_pair_col")[3].second)));
+    assert((std::isnan(df2.get_column<std::pair<std::string, double>>
+                              ("str_dbl_pair_col")[3].second)));
+    assert((
+ df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[3].first ==
+ df2.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[3].first));
+    assert((
+ df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[4] ==
+ df2.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[4]));
+
+    MyDataFrame df3;
+
+    df3.read("./tmp_sample_data_2.dat", io_format::binary);
+    assert(df.get_index() == df3.get_index());
+    assert((df.get_column<int>("xint_col_2") ==
+                df3.get_column<int>("xint_col_2")));
+    assert((df.get_column<std::string>("str_col_2") ==
+                df3.get_column<std::string>("str_col_2")));
+    assert((df.get_column<unsigned long>("ul_col_2") ==
+                df3.get_column<unsigned long>("ul_col_2")));
+    assert((
+  df.get_column<std::pair<std::string, std::string>>("str_str_pair_col") ==
+  df3.get_column<std::pair<std::string, std::string>>("str_str_pair_col")));
+    assert((
+  df.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[0] ==
+  df3.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[0]));
+    assert((std::isnan(df.get_column<std::pair<double, double>>
+                              ("dbl_dbl_pair_col")[1].first)));
+    assert((std::isnan(df.get_column<std::pair<double, double>>
+                              ("dbl_dbl_pair_col")[1].second)));
+    assert((std::isnan(df3.get_column<std::pair<double, double>>
+                               ("dbl_dbl_pair_col")[1].first)));
+    assert((std::isnan(df3.get_column<std::pair<double, double>>
+                               ("dbl_dbl_pair_col")[1].second)));
+    assert((std::isnan(df.get_column<std::pair<double, double>>
+                              ("dbl_dbl_pair_col")[2].first)));
+    assert((std::isnan(df3.get_column<std::pair<double, double>>
+                               ("dbl_dbl_pair_col")[2].first)));
+    assert((
+  df.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[2].second ==
+  df3.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[2].second));
+    assert((std::isnan(df.get_column<std::pair<double, double>>
+                              ("dbl_dbl_pair_col")[3].second)));
+    assert((std::isnan(df3.get_column<std::pair<double, double>>
+                               ("dbl_dbl_pair_col")[3].second)));
+    assert((
+  df.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[3].first ==
+  df3.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[3].first));
+    assert((
+  df.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[4] ==
+  df3.get_column<std::pair<double, double>>("dbl_dbl_pair_col")[4]));
+
+    assert((
+  df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[0] ==
+  df3.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[0]));
+    assert((
+  df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[1].first ==
+  df3.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[1].first));
+    assert((std::isnan(df.get_column<std::pair<std::string, double>>
+                              ("str_dbl_pair_col")[1].second)));
+    assert((std::isnan(df3.get_column<std::pair<std::string, double>>
+                              ("str_dbl_pair_col")[1].second)));
+    assert((
+  df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[2].first ==
+  df3.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[2].first));
+    assert((
+ df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[2].second ==
+ df3.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[2].second));
+    assert((std::isnan(df.get_column<std::pair<std::string, double>>
+                              ("str_dbl_pair_col")[3].second)));
+    assert((std::isnan(df3.get_column<std::pair<std::string, double>>
+                              ("str_dbl_pair_col")[3].second)));
+    assert((
+ df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[3].first ==
+ df3.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[3].first));
+    assert((
+  df.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[4] ==
+  df3.get_column<std::pair<std::string, double>>("str_dbl_pair_col")[4]));
+
+    std::remove("./tmp_sample_data_2.csv");
+    std::remove("./tmp_sample_data_2.dat");
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_difference()  {
+
+    std::cout << "\nTesting difference( ) ..." << std::endl;
+
+    MyDataFrame                df;
+    StlVecType<unsigned long>  idxvec =
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+    StlVecType<double>         dblvec =
+        { 0, 15, -14, 2, 1, 12, 11, 8, 7, 6, 5, 4, 3, 9, 10};
+    StlVecType<double>         dblvec2 =
+        { 100, 101, 102, 103, 104, 103.9, 106.55, 106.34, 1.8, 111, 112, 111.5,
+          114, 115, 116};
+    StlVecType<std::string>    strvec =
+        { "zz", "bb", "cc", "ww", "ee", "ff", "gg", "hh", "ii", "jj", "kk",
+          "ll", "mm", "nn", "oo" };
+
+    df.load_data(std::move(idxvec),
+                 std::make_pair("dbl_col", dblvec),
+                 std::make_pair("dbl_col_2", dblvec2),
+                 std::make_pair("str_col", strvec));
+
+    MyDataFrame df2 = df;
+
+    df2.get_column<double>("dbl_col")[3] = 1000.0;
+    df2.get_column<double>("dbl_col")[6] = 1001.0;
+    df2.get_column<std::string>("str_col")[1] = "Changed";
+    df2.get_column<std::string>("str_col")[5] = "Changed 2";
+
+    MyDataFrame diff_df = df.difference<double, std::string>(df2);
+
+    assert((diff_df.get_index() ==
+                StlVecType<unsigned long>{ 1, 2, 3, 4, 5, 6, 7 }));
+    assert(diff_df.get_column<double>("self_dbl_col").size() == 7);
+    assert(diff_df.get_column<double>("other_dbl_col").size() == 7);
+    assert(std::isnan(diff_df.get_column<double>("self_dbl_col")[0]));
+    assert(std::isnan(diff_df.get_column<double>("other_dbl_col")[0]));
+    assert(std::isnan(diff_df.get_column<double>("self_dbl_col")[1]));
+    assert(std::isnan(diff_df.get_column<double>("other_dbl_col")[1]));
+    assert(diff_df.get_column<double>("self_dbl_col")[3] == 2.0);
+    assert(diff_df.get_column<double>("other_dbl_col")[3] == 1000.0);
+    assert(std::isnan(diff_df.get_column<double>("self_dbl_col")[4]));
+    assert(std::isnan(diff_df.get_column<double>("other_dbl_col")[4]));
+    assert(diff_df.get_column<double>("self_dbl_col")[6] == 11.0);
+    assert(diff_df.get_column<double>("other_dbl_col")[6] == 1001.0);
+    assert(diff_df.get_column<std::string>("self_str_col").size() == 6);
+    assert(diff_df.get_column<std::string>("other_str_col").size() == 6);
+    assert(diff_df.get_column<std::string>("self_str_col")[0] == "");
+    assert(diff_df.get_column<std::string>("other_str_col")[0] == "");
+    assert(diff_df.get_column<std::string>("self_str_col")[1] == "bb");
+    assert(diff_df.get_column<std::string>("other_str_col")[1] == "Changed");
+    assert(diff_df.get_column<std::string>("self_str_col")[2] == "");
+    assert(diff_df.get_column<std::string>("other_str_col")[2] == "");
+    assert(diff_df.get_column<std::string>("self_str_col")[5] == "ff");
+    assert(diff_df.get_column<std::string>("other_str_col")[5] == "Changed 2");
+    assert(! diff_df.has_column("self_dbl_col_2"));
+    assert(! diff_df.has_column("other_dbl_col_2"));
+    assert(! diff_df.has_column("dbl_col_2"));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_at_times()  {
+
+    std::cout << "\nTesting get_data_at_times( ) ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_Intraday.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  result = df.get_view_at_times<double, long>(16, 30);
+
+    assert(result.get_index().size() == 7);
+    assert(result.get_index()[0].date() == 19861115);
+    assert(result.get_index()[1].date() == 19861214);
+    assert(result.get_index()[6].date() == 19870613);
+    assert(result.get_index()[5].date() == 19870508);
+    assert(result.get_column<double>("dbl value").size() == 7);
+    assert(result.get_column<double>("dbl value")[0] == 4.0);
+    assert(result.get_column<double>("dbl value")[1] == 655.5);
+    assert(result.get_column<double>("dbl value")[6] == 4767.0);
+    assert(result.get_column<double>("dbl value")[5] == 3935.5);
+    assert(result.get_column<long>("lng value").size() == 7);
+    assert(result.get_column<long>("lng value")[0] == 80);
+    assert(result.get_column<long>("lng value")[1] == 13110);
+    assert(result.get_column<long>("lng value")[6] == 95340);
+    assert(result.get_column<long>("lng value")[5] == 78710);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_before_times()  {
+
+    std::cout << "\nTesting get_data_before_times( ) ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_Intraday.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  result = df.get_view_before_times<double, long>(1, 16);
+
+    assert(result.get_index().size() == 523);
+    assert(result.get_index()[0].date() == 19861116);
+    assert(result.get_index()[10].date() == 19861120);
+    assert(result.get_index()[500].date() == 19870615);
+    assert(result.get_index()[522].date() == 19870624);
+    assert(result.get_column<double>("dbl value").size() == 523);
+    assert(result.get_column<double>("dbl value")[0] == 11.0);
+    assert(result.get_column<double>("dbl value")[10] == 101.0);
+    assert(result.get_column<double>("dbl value")[500] == 4796.0);
+    assert(result.get_column<double>("dbl value")[522] == 4996.0);
+    assert(result.get_column<long>("lng value").size() == 523);
+    assert(result.get_column<long>("lng value")[0] == 220);
+    assert(result.get_column<long>("lng value")[10] == 2020);
+    assert(result.get_column<long>("lng value")[500] == 95920);
+    assert(result.get_column<long>("lng value")[522] == 99920);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_after_times()  {
+
+    std::cout << "\nTesting get_data_after_times( ) ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_Intraday.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  result = df.get_view_after_times<double, long>(23, 40);
+
+    assert(result.get_index().size() == 137);
+    assert(result.get_index()[0].date() == 19861118);
+    assert(result.get_index()[10].date() == 19861203);
+    assert(result.get_index()[100].date() == 19870423);
+    assert(result.get_index()[136].date() == 19870623);
+    assert(result.get_column<double>("dbl value").size() == 137);
+    assert(result.get_column<double>("dbl value")[0] == 78.0);
+    assert(result.get_column<double>("dbl value")[10] == 415.0);
+    assert(result.get_column<double>("dbl value")[100] == 3601.5);
+    assert(result.get_column<double>("dbl value")[136] == 4995.0);
+    assert(result.get_column<long>("lng value").size() == 137);
+    assert(result.get_column<long>("lng value")[0] == 1560);
+    assert(result.get_column<long>("lng value")[10] == 8300);
+    assert(result.get_column<long>("lng value")[100] == 72030);
+    assert(result.get_column<long>("lng value")[136] == 99900);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_on_days()  {
+
+    std::cout << "\nTesting get_data_on_days( ) ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_Intraday.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  result =
+        df.get_view_on_days<double, long>(
+            { DT_WEEKDAY::MON, DT_WEEKDAY::FRI });
+
+    assert(result.get_index().size() == 2861);
+    assert(result.get_index()[0].date() == 19861117);
+    assert(result.get_index()[100].date() == 19861124);
+    assert(result.get_index()[1000].date() == 19870202);
+    assert(result.get_index()[2860].date() == 19870622);
+    assert(result.get_column<double>("dbl value").size() == 2861);
+    assert(result.get_column<double>("dbl value")[0] == 32.5);
+    assert(result.get_column<double>("dbl value")[100] == 195.5);
+    assert(result.get_column<double>("dbl value")[1000] == 1771.5);
+    assert(result.get_column<double>("dbl value")[2860] == 4973.5);
+    assert(result.get_column<long>("lng value").size() == 2861);
+    assert(result.get_column<long>("lng value")[0] == 650);
+    assert(result.get_column<long>("lng value")[100] == 3910);
+    assert(result.get_column<long>("lng value")[1000] == 35430);
+    assert(result.get_column<long>("lng value")[2860] == 99470);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_in_months()  {
+
+    std::cout << "\nTesting get_data_in_months( ) ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_Intraday.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  result =
+        df.get_view_in_months<double, long>({ DT_MONTH::JAN, DT_MONTH::NOV });
+
+    assert(result.get_index().size() == 2101);
+    assert(result.get_index()[0].date() == 19861115);
+    assert(result.get_index()[100].date() == 19861117);
+    assert(result.get_index()[1000].date() == 19870107);
+    assert(result.get_index()[2100].date() == 19870131);
+    assert(result.get_column<double>("dbl value").size() == 2101);
+    assert(result.get_column<double>("dbl value")[0] == 0.5);
+    assert(result.get_column<double>("dbl value")[100] == 50.5);
+    assert(result.get_column<double>("dbl value")[1000] == 1198.0);
+    assert(result.get_column<double>("dbl value")[2100] == 1748.0);
+    assert(result.get_column<long>("lng value").size() == 2101);
+    assert(result.get_column<long>("lng value")[0] == 10);
+    assert(result.get_column<long>("lng value")[100] == 1010);
+    assert(result.get_column<long>("lng value")[1000] == 23960);
+    assert(result.get_column<long>("lng value")[2100] == 34960);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_on_days_in_month()  {
+
+    std::cout << "\nTesting get_data_on_days_in_month( ) ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_Intraday.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  result = df.get_view_on_days_in_month<double, long>({ 31, 5 });
+
+    assert(result.get_index().size() == 505);
+    assert(result.get_index()[0].date() == 19861205);
+    assert(result.get_index()[100].date() == 19870105);
+    assert(result.get_index()[300].date() == 19870331);
+    assert(result.get_index()[504].date() == 19870605);
+    assert(result.get_column<double>("dbl value").size() == 505);
+    assert(result.get_column<double>("dbl value")[0] == 439.5);
+    assert(result.get_column<double>("dbl value")[100] == 1145.5);
+    assert(result.get_column<double>("dbl value")[300] == 3071.0);
+    assert(result.get_column<double>("dbl value")[504] == 4594.0);
+    assert(result.get_column<long>("lng value").size() == 505);
+    assert(result.get_column<long>("lng value")[0] == 8790);
+    assert(result.get_column<long>("lng value")[100] == 22910);
+    assert(result.get_column<long>("lng value")[300] == 61420);
+    assert(result.get_column<long>("lng value")[504] == 91880);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_between_times()  {
+
+    std::cout << "\nTesting get_data_between_times( ) ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_Intraday.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    {
+        // Between 11am and 11:30am
+        //
+        const auto  result =
+            df.get_view_between_times<double, long>(11, 11, 0, 30);
+
+        assert(result.get_index().size() == 207);
+        assert(result.get_index()[0].date() == 19861116);
+        assert(result.get_index()[10].date() == 19861125);
+        assert(result.get_index()[100].date() == 19870303);
+        assert(result.get_index()[206].date() == 19870623);
+        assert(result.get_column<double>("dbl value").size() == 207);
+        assert(result.get_column<double>("dbl value")[0] == 21.0);
+        assert(result.get_column<double>("dbl value")[10] == 225.5);
+        assert(result.get_column<double>("dbl value")[100] == 2438.0);
+        assert(result.get_column<double>("dbl value")[206] == 4984.5);
+        assert(result.get_column<long>("lng value").size() == 207);
+        assert(result.get_column<long>("lng value")[0] == 420);
+        assert(result.get_column<long>("lng value")[10] == 4510);
+        assert(result.get_column<long>("lng value")[100] == 48760);
+        assert(result.get_column<long>("lng value")[206] == 99690);
+    }
+
+    {
+        const auto  result =
+            df.get_view_between_times<double, long>(11, 11, 0, 30, 0, 0, 0, 0,
+                                                    inclusiveness::both);
+
+        assert(result.get_index().size() == 226);
+        assert(result.get_index()[0].date() == 19861116);
+        assert(result.get_index()[10].date() == 19861125);
+        assert(result.get_index()[100].date() == 19870224);
+        assert(result.get_index()[225].date() == 19870623);
+        assert(result.get_column<double>("dbl value").size() == 226);
+        assert(result.get_column<double>("dbl value")[0] == 21.0);
+        assert(result.get_column<double>("dbl value")[10] == 225.0);
+        assert(result.get_column<double>("dbl value")[100] == 2283.5);
+        assert(result.get_column<double>("dbl value")[225] == 4984.5);
+        assert(result.get_column<long>("lng value").size() == 226);
+        assert(result.get_column<long>("lng value")[0] == 420);
+        assert(result.get_column<long>("lng value")[10] == 4500);
+        assert(result.get_column<long>("lng value")[100] == 45670);
+        assert(result.get_column<long>("lng value")[225] == 99690);
+    }
+
+    {
+        const auto  result =
+            df.get_data_between_times<double, long>(11, 11, 0, 30, 0, 0, 0, 0,
+                                                    inclusiveness::end);
+
+        assert(result.get_index().size() == 218);
+        assert(result.get_index()[0].date() == 19861116);
+        assert(result.get_index()[10].date() == 19861125);
+        assert(result.get_index()[100].date() == 19870226);
+        assert(result.get_index()[217].date() == 19870623);
+        assert(result.get_column<double>("dbl value").size() == 218);
+        assert(result.get_column<double>("dbl value")[0] == 21.0);
+        assert(result.get_column<double>("dbl value")[10] == 225.5);
+        assert(result.get_column<double>("dbl value")[100] == 2331.0);
+        assert(result.get_column<double>("dbl value")[217] == 4984.5);
+        assert(result.get_column<long>("lng value").size() == 218);
+        assert(result.get_column<long>("lng value")[0] == 420);
+        assert(result.get_column<long>("lng value")[10] == 4510);
+        assert(result.get_column<long>("lng value")[100] == 46620);
+        assert(result.get_column<long>("lng value")[217] == 99690);
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_remove_top_n_data()  {
+
+    std::cout << "\nTesting remove_top_n_data( ) ..." << std::endl;
+
+    StlVecType<unsigned long>   idx =
+        { 123450, 123451, 123452, 123453, 123454, 123455, 123456,
+          123457, 123458, 123459, 123460, 123461, 123462, 123463 };
+    StlVecType<double>          d1 =
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+    StlVecType<double>          d2 =
+        { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 1.89 };
+    StlVecType<double>          d3 =
+        { 15, 16, 15, 18, 19, 16, 21, 0.34, 1.56, 0.34, 2.3, 0.34, 19.0, 10 };
+    StlVecType<int>             i1 = { 22, 23, 24, 25, 99 };
+    MyDataFrame                 df;
+
+    df.load_data(std::move(idx),
+                 std::make_pair("col_1", d1),
+                 std::make_pair("col_2", d2),
+                 std::make_pair("col_3", d3),
+                 std::make_pair("col_4", i1));
+
+    MyDataFrame df2 = df;
+
+    auto    lbd =
+        [](const unsigned long &, const double &val) -> bool {
+            return (val < 100.0);
+        };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, int>
+            ("col_1", lbd);
+
+    df.remove_top_n_data<double, int, double>("col_3", 4);
+    view.remove_top_n_data<double, int, double>("col_3", 4);
+
+    assert(df.get_index().size() == 10);
+    assert(view.get_index().size() == 10);
+    assert(df.get_column<double>("col_2").size() == 10);
+    assert(view.get_column<double>("col_2").size() == 10);
+    assert(df.get_column<int>("col_4").size() == 10);
+    assert(view.get_column<int>("col_4").size() == 10);
+    assert(df.get_index()[4] == 123457);
+    assert(view.get_index()[4] == 123457);
+    assert(df.get_column<double>("col_1")[6] == 10);
+    assert(view.get_column<double>("col_1")[6] == 10);
+    assert(df.get_column<int>("col_4")[2] == 24);
+    assert(view.get_column<int>("col_4")[2] == 24);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_remove_bottom_n_data()  {
+
+    std::cout << "\nTesting remove_bottom_n_data( ) ..." << std::endl;
+
+    StlVecType<unsigned long>   idx =
+        { 123450, 123451, 123452, 123453, 123454, 123455, 123456,
+          123457, 123458, 123459, 123460, 123461, 123462, 123463 };
+    StlVecType<double>          d1 =
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+    StlVecType<double>          d2 =
+        { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 1.89 };
+    StlVecType<double>          d3 =
+        { 15, 16, 15, 18, 19, 16, 21, 0.34, 1.56, 0.34, 2.3, 0.34, 19.0, 10 };
+    StlVecType<int>             i1 = { 22, 23, 24, 25, 99 };
+    MyDataFrame                 df;
+
+    df.load_data(std::move(idx),
+                 std::make_pair("col_1", d1),
+                 std::make_pair("col_2", d2),
+                 std::make_pair("col_3", d3),
+                 std::make_pair("col_4", i1));
+
+    MyDataFrame df2 = df;
+
+    auto    lbd =
+        [](const unsigned long &, const double &val) -> bool {
+            return (val < 100.0);
+        };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, int>
+            ("col_1", lbd);
+
+    df.remove_bottom_n_data<double, int, double>("col_3", 4);
+    view.remove_bottom_n_data<double, int, double>("col_3", 4);
+
+    assert(df.get_index().size() == 10);
+    assert(view.get_index().size() == 10);
+    assert(df.get_column<double>("col_2").size() == 10);
+    assert(view.get_column<double>("col_2").size() == 10);
+    assert(df.get_column<int>("col_4").size() == 10);
+    assert(view.get_column<int>("col_4").size() == 10);
+    assert(df.get_index()[4] == 123454);
+    assert(view.get_index()[4] == 123454);
+    assert(df.get_column<double>("col_1")[6] == 7);
+    assert(view.get_column<double>("col_1")[6] == 7);
+    assert(df.get_column<int>("col_4")[2] == 24);
+    assert(view.get_column<int>("col_4")[2] == 24);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_remove_above_quantile_data()  {
+
+    std::cout << "\nTesting remove_above_quantile_data( ) ..." << std::endl;
+
+    StlVecType<unsigned long>   idx =
+        { 123450, 123451, 123452, 123453, 123454, 123455, 123456,
+          123457, 123458, 123459, 123460, 123461, 123462, 123463 };
+    StlVecType<double>          d1 =
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+    StlVecType<double>          d2 =
+        { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 1.89 };
+    StlVecType<double>          d3 =
+        { 15, 16, 15, 18, 19, 16, 21, 0.34, 1.56, 0.34, 2.3, 0.34, 19.0, 10 };
+    StlVecType<int>             i1 = { 22, 23, 24, 25, 99 };
+    MyDataFrame                 df;
+
+    df.load_data(std::move(idx),
+                 std::make_pair("col_1", d1),
+                 std::make_pair("col_2", d2),
+                 std::make_pair("col_3", d3),
+                 std::make_pair("col_4", i1));
+
+    MyDataFrame df2 = df;
+
+    auto    lbd =
+        [](const unsigned long &, const double &val) -> bool {
+            return (val < 100.0);
+        };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, int>("col_1", lbd);
+
+    df.remove_above_quantile_data<double, int, double>("col_3", 0.45);
+    view.remove_above_quantile_data<double, int, double>("col_3", 0.45);
+
+    StlVecType<unsigned long>   index =
+        { 123457, 123458, 123459, 123460, 123461, 123463 };
+    StlVecType<double>          col_1 = { 8, 9, 10, 11, 12, 14 };
+    StlVecType<double>          col_2 = { 20, 22, 23, 30, 31, 1.89 };
+    StlVecType<double>          col_3 = { 0.34, 1.56, 0.34, 2.3, 0.34, 10 };
+    StlVecType<int>             col_4 = { 0, 0, 0, 0, 0, 0 };
+
+    assert(df.get_index() == index);
+    assert(df.get_column<double>("col_1") == col_1);
+    assert(df.get_column<double>("col_2") == col_2);
+    assert(df.get_column<double>("col_3") == col_3);
+    assert(df.get_column<int>("col_4") == col_4);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_remove_below_quantile_data()  {
+
+    std::cout << "\nTesting remove_below_quantile_data( ) ..." << std::endl;
+
+    StlVecType<unsigned long>   idx =
+        { 123450, 123451, 123452, 123453, 123454, 123455, 123456,
+          123457, 123458, 123459, 123460, 123461, 123462, 123463 };
+    StlVecType<double>          d1 =
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+    StlVecType<double>          d2 =
+        { 8, 9, 10, 11, 12, 13, 14, 20, 22, 23, 30, 31, 32, 1.89 };
+    StlVecType<double>          d3 =
+        { 15, 16, 15, 18, 19, 16, 21, 0.34, 1.56, 0.34, 2.3, 0.34, 19.0, 10 };
+    StlVecType<int>             i1 = { 22, 23, 24, 25, 99 };
+    MyDataFrame                 df;
+
+    df.load_data(std::move(idx),
+                 std::make_pair("col_1", d1),
+                 std::make_pair("col_2", d2),
+                 std::make_pair("col_3", d3),
+                 std::make_pair("col_4", i1));
+
+    MyDataFrame df2 = df;
+
+    auto    lbd =
+        [](const unsigned long &, const double &val) -> bool {
+            return (val < 100.0);
+        };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, int>("col_1", lbd);
+
+    df.remove_below_quantile_data<double, int, double>("col_3", 0.45);
+    view.remove_below_quantile_data<double, int, double>("col_3", 0.45);
+
+    StlVecType<unsigned long>   index =
+        { 123450, 123451, 123452, 123453, 123454, 123455, 123456, 123462 };
+    StlVecType<double>          col_1 = { 1, 2, 3, 4, 5, 6, 7, 13 };
+    StlVecType<double>          col_2 = { 8, 9, 10, 11, 12, 13, 14, 32 };
+    StlVecType<double>          col_3 = { 15, 16, 15, 18, 19, 16, 21, 19 };
+    StlVecType<int>             col_4 = { 22, 23, 24, 25, 99, 0, 0, 0 };
+
+    assert(df.get_index() == index);
+    assert(df.get_column<double>("col_1") == col_1);
+    assert(df.get_column<double>("col_2") == col_2);
+    assert(df.get_column<double>("col_3") == col_3);
+    assert(df.get_column<int>("col_4") == col_4);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_remove_data_by_stdev()  {
+
+    std::cout << "\nTesting remove_data_by_stdev( ) ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    StrDataFrame    df2 = df;
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+
+    df.remove_data_by_stdev <double, double, long>("IBM_Close", 0.25, -0.5);
+    view.remove_data_by_stdev<double, double, long>("IBM_Close", 0.25, -0.5);
+
+    assert(df.get_index().size() == 570);
+    assert(view.get_index().size() == 570);
+    assert(view.get_column<double>("IBM_Open").size() == 570);
+    assert(view.get_column<long>("IBM_Volume").size() == 570);
+    assert(df.get_column<double>("IBM_Low").size() == 570);
+    assert(df.get_column<long>("IBM_Volume").size() == 570);
+    assert(df.get_index()[500] == "2019-04-08");
+    assert(view.get_index()[101] == "2016-04-26");
+    assert(view.get_column<double>("IBM_Open")[45] == 142.600006);
+    assert(df.get_column<long>("IBM_Volume")[300] == 4300500);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_by_stdev()  {
+
+    std::cout << "\nTesting get_data_by_stdev( ) ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.dat", io_format::binary);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    StrDataFrame    df2 = df;
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+
+    auto    result_df =
+        df.get_data_by_stdev <double, double, long>("IBM_Close", 0.1, -0.4);
+    auto    result_view =
+        view.get_view_by_stdev<double, double, long>("IBM_Close", 0.1, -0.4);
+
+    assert(result_df.get_index().size() == 379);
+    assert(result_view.get_index().size() == 379);
+    assert(result_view.get_column<double>("IBM_Open").size() == 379);
+    assert(result_view.get_column<long>("IBM_Volume").size() == 379);
+    assert(result_df.get_column<double>("IBM_Low").size() == 379);
+    assert(result_df.get_column<long>("IBM_Volume").size() == 379);
+    assert(result_df.get_index()[300] == "2018-08-23");
+    assert(result_view.get_index()[300] == "2018-08-23");
+    assert(result_df.get_index()[101] == "2016-06-13");
+    assert(result_view.get_index()[101] == "2016-06-13");
+    assert(result_view.get_column<double>("IBM_Open")[45] == 141.740005);
+    assert(result_df.get_column<double>("IBM_Open")[45] == 141.740005);
+    assert(result_df.get_column<long>("IBM_Volume")[230] == 4413200);
+    assert(result_view.get_column<long>("IBM_Volume")[230] == 4413200);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_by_kmeans()  {
+
+    std::cout << "\nTesting get_data_by_kmeans( ) ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.dat", io_format::binary);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    StrDataFrame    df2 = df;
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+
+    auto    result_df =
+        df.get_data_by_kmeans <4, double, double, long>
+            ("IBM_Close",
+             [](const double &x, const double &y) -> double  {
+                 return (std::fabs(x - y));
+             },
+             1000,  // Number of iterations
+             1234); // Random number seed
+    auto    result_view =
+        view.get_view_by_kmeans<4, double, double, long>
+            ("IBM_Close",
+             [](const double &x, const double &y) -> double  {
+                 return (std::fabs(x - y));
+             },
+             1000,  //  Number of iterations
+             1234); // Random number seed
+
+    assert(result_df.size() == 4);
+    assert(result_df.size() == result_view.size());
+
+    assert(result_df[0].get_index().size() == 272);
+    assert(result_df[0].get_column<double>("IBM_Open").size() == 272);
+    assert(result_df[0].get_index()[0] == "2014-01-02");
+    assert(result_df[0].get_index()[271] == "2017-04-07");
+    assert(result_df[0].get_column<double>("IBM_High")[200] == 182.839996);
+    assert(result_df[0].get_column<long>("IBM_Volume")[100] == 3721600);
+    assert(result_view[0].get_index().size() == 272);
+    assert(result_view[0].get_column<double>("IBM_Open").size() == 272);
+    assert(result_view[0].get_index()[0] == "2014-01-02");
+    assert(result_view[0].get_index()[271] == "2017-04-07");
+    assert(result_view[0].get_column<double>("IBM_High")[200] == 182.839996);
+    assert(result_view[0].get_column<long>("IBM_Volume")[100] == 3721600);
+
+    assert(result_df[1].get_index().size() == 606);
+    assert(result_df[1].get_column<double>("IBM_Open").size() == 606);
+    assert(result_df[1].get_index()[0] == "2015-08-21");
+    assert(result_df[1].get_index()[605] == "2020-10-08");
+    assert(result_df[1].get_column<double>("IBM_High")[200] == 145.880005);
+    assert(result_df[1].get_column<long>("IBM_Volume")[100] == 4386200);
+    assert(result_view[1].get_index().size() == 606);
+    assert(result_view[1].get_column<double>("IBM_Open").size() == 606);
+    assert(result_view[1].get_index()[0] == "2015-08-21");
+    assert(result_view[1].get_index()[605] == "2020-10-08");
+    assert(result_view[1].get_column<double>("IBM_High")[200] == 145.880005);
+    assert(result_view[1].get_column<long>("IBM_Volume")[100] == 4386200);
+
+    assert(result_df[2].get_index().size() == 585);
+    assert(result_df[2].get_column<double>("IBM_Open").size() == 585);
+    assert(result_df[2].get_index()[0] == "2014-10-20");
+    assert(result_df[2].get_index()[584] == "2020-02-21");
+    assert(result_df[2].get_column<double>("IBM_High")[200] == 153.100006);
+    assert(result_df[2].get_column<long>("IBM_Volume")[100] == 3749600);
+    assert(result_view[2].get_index().size() == 585);
+    assert(result_view[2].get_column<double>("IBM_Open").size() == 585);
+    assert(result_view[2].get_index()[0] == "2014-10-20");
+    assert(result_view[2].get_index()[584] == "2020-02-21");
+    assert(result_view[2].get_column<double>("IBM_High")[200] == 153.100006);
+    assert(result_view[2].get_column<long>("IBM_Volume")[100] == 3749600);
+
+    assert(result_df[3].get_index().size() == 258);
+    assert(result_df[3].get_column<double>("IBM_Open").size() == 258);
+    assert(result_df[3].get_index()[0] == "2016-01-15");
+    assert(result_df[3].get_index()[257] == "2020-10-30");
+    assert(result_df[3].get_column<double>("IBM_High")[200] == 127.239998);
+    assert(result_df[3].get_column<long>("IBM_Volume")[100] == 12502100);
+    assert(result_view[3].get_index().size() == 258);
+    assert(result_view[3].get_column<double>("IBM_Open").size() == 258);
+    assert(result_view[3].get_index()[0] == "2016-01-15");
+    assert(result_view[3].get_index()[257] == "2020-10-30");
+    assert(result_view[3].get_column<double>("IBM_High")[200] == 127.239998);
+    assert(result_view[3].get_column<long>("IBM_Volume")[100] == 12502100);
+}
+
+// ----------------------------------------------------------------------------
+
+void test_get_data_by_affin()  {
+
+    std::cout << "\nTesting get_data_by_affin( ) ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.dat", io_format::binary);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    StrDataFrame    df2 = df;
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+
+    auto    views =
+        view.get_view_by_affin<double, double, long>
+            ("IBM_Close",
+             [](const double &x, const double &y) -> double  {
+                 return (std::fabs(x - y));
+             },
+             25);  //  Number of iterations
+
+    assert(views.size() == 4);
+
+    assert(views[0].get_index().size() == 157);
+    assert(views[0].get_column<double>("IBM_Open").size() == 157);
+    assert(views[0].get_index()[0] == "2014-10-21");
+    assert(views[0].get_index()[156] == "2018-02-01");
+    assert(views[0].get_column<double>("IBM_High")[140] == 162.899994);
+    assert(views[0].get_column<long>("IBM_Volume")[100] == 2543100);
+
+    assert(views[1].get_index().size() == 309);
+    assert(views[1].get_column<double>("IBM_Open").size() == 309);
+    assert(views[1].get_index()[0] == "2014-01-02");
+    assert(views[1].get_index()[308] == "2018-01-18");
+    assert(views[1].get_column<double>("IBM_High")[200] == 182.839996);
+    assert(views[1].get_column<long>("IBM_Volume")[100] == 3721600);
+
+    assert(views[2].get_index().size() == 256);
+    assert(views[2].get_column<double>("IBM_Open").size() == 256);
+    assert(views[2].get_index()[0] == "2014-11-20");
+    assert(views[2].get_index()[255] == "2020-02-13");
+    assert(views[2].get_column<double>("IBM_High")[200] == 156.800003);
+    assert(views[2].get_column<long>("IBM_Volume")[100] == 2838100);
+
+    assert(views[3].get_index().size() == 999);
+    assert(views[3].get_column<double>("IBM_Open").size() == 999);
+    assert(views[3].get_index()[0] == "2014-12-15");
+    assert(views[3].get_index()[998] == "2020-10-30");
+    assert(views[3].get_column<double>("IBM_High")[200] == 152.929993);
+    assert(views[3].get_column<long>("IBM_Volume")[100] == 3924800);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_remove_data_by_hampel()  {
+
+    std::cout << "\nTesting remove_data_by_hampel( ) ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.csv", io_format::csv2);
+        assert(df.get_index().size() == 1721);
+        assert(df.get_column<double>("IBM_Open").size() == 1721);
+        assert(df.get_column<double>("IBM_Close").size() == 1721);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    StrDataFrame    df2 = df;
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+
+    df.remove_data_by_hampel <double, double, long>("IBM_Close", 10);
+    view.remove_data_by_hampel<double, double, long>("IBM_Close", 10);
+
+    assert(df.get_index().size() == 1644);
+    assert(view.get_index().size() == 1644);
+    assert(view.get_column<double>("IBM_Open").size() == 1644);
+    assert(view.get_column<long>("IBM_Volume").size() == 1644);
+    assert(df.get_column<double>("IBM_Low").size() == 1644);
+    assert(df.get_column<long>("IBM_Volume").size() == 1644);
+    assert(df.get_index()[500] == "2016-01-25");
+    assert(view.get_index()[101] == "2014-05-30");
+    assert(view.get_column<double>("IBM_Open")[45] == 187.550003);
+    assert(df.get_column<long>("IBM_Volume")[300] == 4255400);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_DBSCANVisitor()  {
+
+    std::cout << "\nTesting DBSCANVisitor{ } ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    view =
+        df.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+
+    DBSCANVisitor<double, std::string>  dbscan(10, 4);
+
+    // Set a different distance function than default
+    //
+    dbscan.set_dist_func([](const double &x, const double &y)  {
+                             return (std::fabs(x - y));
+                         });
+
+    view.single_act_visit<double>("IBM_Close", dbscan);
+
+    assert(dbscan.get_noisey_idxs().size() == 2);
+    assert(dbscan.get_noisey_idxs()[0] == 1564);
+    assert(dbscan.get_noisey_idxs()[1] == 1565);
+
+    assert(dbscan.get_result().size() == 1);
+    assert(dbscan.get_result()[0].size() == 1719);
+    assert(std::fabs(dbscan.get_result()[0][6] - 187.26) < 0.001);
+    assert(std::fabs(dbscan.get_result()[0][18] - 176.4) < 0.001);
+    assert(std::fabs(dbscan.get_result()[0][135] - 192.49) < 0.001);
+    assert(std::fabs(dbscan.get_result()[0][1718] - 111.66) < 0.001);
+
+    // Now multidimensional data
+    //
+    RandGenParams<double>   p;
+
+    p.seed = 123;
+    p.min_value = -20.0;
+    p.max_value = 20.0;
+
+    using col_t = std::array<double, 3>;
+
+    auto                rand_vec =
+        gen_uniform_real_dist<double>(df.get_index().size() * 3, p);
+    std::vector<col_t>  multi_dimen_col(df.get_index().size());
+
+    for (std::size_t i { 0 }, j { 0 }; j < rand_vec.size(); ++i)  {
+        multi_dimen_col[i][0] = rand_vec[j++];
+        multi_dimen_col[i][1] = rand_vec[j++];
+        multi_dimen_col[i][2] = rand_vec[j++];
+    }
+    df.load_column<col_t>("multi_dimen_col", std::move(multi_dimen_col));
+
+    DBSCANVisitor<col_t, std::string>   md_dbscan(10, 4);
+
+    df.single_act_visit<col_t>("multi_dimen_col", md_dbscan);
+
+    const auto  &md_clusters = md_dbscan.get_result();
+
+    assert(md_clusters.size() == 30); // Number of clusters
+
+    assert(md_clusters[0].size() == 27);
+    assert(std::fabs(md_clusters[0][6][1] - 4.24441) < 0.00001);
+
+    assert(md_clusters[26].size() == 10);
+    assert(std::fabs(md_clusters[26][3][0] - 14.87) < 0.001);
+
+    assert(md_clusters[8].size() == 21);
+    assert(std::fabs(md_clusters[8][9][2] - -0.348493) < 0.000001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_MeanShiftVisitor()  {
+
+    std::cout << "\nTesting MeanShiftVisitor{ } ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    MeanShiftVisitor<double, std::string>   mshift(
+        1.0,
+        4,
+        mean_shift_kernel::gaussian);
+
+    mshift.set_dist_func([](const double &x, const double &y) -> double  {
+                             return (std::fabs(x - y));
+                         });
+    df.single_act_visit<double>("IBM_Close", mshift);
+
+    assert(mshift.get_result().size() == 18);
+    assert(mshift.get_result()[0].size() == 123);
+    assert(mshift.get_result()[4].size() == 57);
+    assert(mshift.get_result()[6].size() == 275);
+    assert(mshift.get_result()[10].size() == 54);
+    assert(mshift.get_result()[14].size() == 9);
+    assert(mshift.get_result()[17].size() == 2);
+    assert(std::fabs(mshift.get_result()[0][6] - 187.26) < 0.001);
+    assert(std::fabs(mshift.get_result()[4][18] - 166.08) < 0.001);
+    assert(std::fabs(mshift.get_result()[6][273] - 151.1) < 0.001);
+    assert(std::fabs(mshift.get_result()[10][35] - 129.57) < 0.001);
+    assert(std::fabs(mshift.get_result()[17][1] - 94.77) < 0.001);
+
+    // Now multidimensional data
+    //
+    RandGenParams<double>   p;
+
+    p.seed = 123;
+    p.min_value = -20.0;
+    p.max_value = 20.0;
+
+    using col_t = std::array<double, 3>;
+
+    auto    rand_vec =
+        gen_uniform_real_dist<double>(df.get_index().size() * 3, p);
+
+    std::vector<col_t>  multi_dimen_col(df.get_index().size());
+
+    for (std::size_t i { 0 }, j { 0 }; j < rand_vec.size(); ++i)  {
+        multi_dimen_col[i][0] = rand_vec[j++];
+        multi_dimen_col[i][1] = rand_vec[j++];
+        multi_dimen_col[i][2] = rand_vec[j++];
+    }
+    df.load_column<col_t>("multi_dimen_col", std::move(multi_dimen_col));
+
+    MeanShiftVisitor<col_t, std::string>    md_mshift(
+        1.0,
+        10,
+        mean_shift_kernel::sigmoid);
+
+    df.single_act_visit<col_t>("multi_dimen_col", md_mshift);
+
+    const auto  &md_clusters = md_mshift.get_result();
+
+    assert(md_clusters.size() == 52); // Number of clusters
+
+    assert(md_clusters[0].size() == 73);
+    assert(std::fabs(md_clusters[0][6][1] - -1.8807) < 0.0001);
+
+    assert(md_clusters[28].size() == 40);
+    assert(std::fabs(md_clusters[28][3][0] - 12.6347) < 0.0001);
+
+    assert(md_clusters[51].size() == 1);
+    assert(std::fabs(md_clusters[51][0][2] - -19.7932) < 0.0001);
+}
+
+// ----------------------------------------------------------------------------
+
+void test_get_data_by_dbscan()  {
+
+    std::cout << "\nTesting get_data_by_dbscan( ) ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.dat", io_format::binary);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    StrDataFrame    df2 = df;
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+
+    // I am using both views and dataframes to make sure both work
+    //
+    auto    views =
+        view.get_view_by_dbscan<double, double, long>("IBM_Close", 10, 4);
+    auto    dfs =
+        df.get_data_by_dbscan<double, double, long>("IBM_Close", 10, 4);
+
+    assert(views.size() == 2);
+    assert(dfs.size() == 2);
+
+    assert(views[0].get_index().size() == 1705);
+    assert(
+    std::fabs(views[0].get_column<double>("IBM_Close")[4] - 187.97) < 0.001);
+
+    // views[1].write<std::ostream, double, long>
+    //     (std::cout, io_format::pretty_prt, { .precision = 3 });
+
+    assert(dfs[1].get_index().size() == 16);
+    assert(
+    std::fabs(dfs[1].get_column<double>("IBM_Open")[15] - 107.25) < 0.001);
+}
+
+// ----------------------------------------------------------------------------
+
+void test_get_data_by_mshift()  {
+
+    std::cout << "\nTesting get_data_by_mshift( ) ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.dat", io_format::binary);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    StrDataFrame    df2 = df;
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+
+    // I am using both views and dataframes to make sure both work
+    //
+    auto    views =
+        view.get_view_by_mshift<double, double, long>
+            ("IBM_Close", 1, 4, mean_shift_kernel::gaussian);
+    auto    dfs =
+        df.get_data_by_mshift<double, double, long>
+            ("IBM_Close", 1, 4, mean_shift_kernel::gaussian);
+
+    assert(views.size() == 38);
+    assert(dfs.size() == 38);
+    assert(views[0].get_index().size() == 57);
+    assert(dfs[0].get_index().size() == 57);
+    assert(views[4].get_index().size() == 14);
+    assert(views[6].get_index().size() == 26);
+    assert(views[10].get_index().size() == 122);
+    assert(views[14].get_index().size() == 25);
+    assert(views[18].get_index().size() == 89);
+    assert(dfs[18].get_index().size() == 89);
+
+    assert(
+    (std::fabs(views[0].get_column<double>("IBM_Close")[7] - 187.74) < 0.001));
+    assert(
+    (std::fabs(dfs[5].get_column<double>("IBM_Open")[15] - 172.97) < 0.001));
+    assert(
+    (std::fabs(views[16].get_column<double>("IBM_High")[3] - 148.4) < 0.001));
+    assert(dfs[18].get_column<long>("IBM_Volume")[0] == 7073200);
+    assert(views[18].get_index()[1] == "2015-10-20");
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_view_assign()  {
+
+    std::cout << "\nTesting view_assign( ) ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    ptr_view =
+        df.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+    auto    view = df.get_view_by_loc<double, long>(Index2D<long>{ 100, 500 });
+
+    StrDataFrame    df2;
+    StrDataFrame    df3;
+
+    df2.assign<decltype(ptr_view), double, long>(ptr_view);
+    df3.assign<decltype(view), double, long>(view);
+
+    assert(df2.get_index().size() == 1721);
+    assert(df3.get_index().size() == 400);
+    assert(std::fabs(df2.get_column<double>("IBM_Open")[100] - 184.48) < 0.001);
+    assert(df3.get_column<long>("IBM_Volume")[100] == 4350200);
+
+    StrDataFrame::View      dfv;
+    StrDataFrame::PtrView   dfpv;
+
+    dfv.assign<StrDataFrame, double, long>(df2);
+    dfpv.assign<StrDataFrame, double, long>(df3);
+    assert(dfv.get_index().size() == 1721);
+    assert(dfpv.get_index().size() == 400);
+    assert(std::fabs(dfv.get_column<double>("IBM_Open")[100] - 184.48) < 0.001);
+    assert(dfpv.get_column<long>("IBM_Volume")[100] == 4350200);
+
+    StrDataFrame::View      dfv2;
+    StrDataFrame::PtrView   dfpv2;
+
+    dfv2.assign<decltype(dfpv), double, long>(dfpv);
+    dfpv2.assign<decltype(dfv), double, long>(dfv);
+    assert(dfv2.get_index().size() == 400);
+    assert(dfpv2.get_index().size() == 1721);
+    assert((
+        std::fabs(dfv2.get_column<double>("IBM_Open")[100] - 181.24) < 0.001));
+    assert(dfpv2.get_column<long>("IBM_Volume")[100] == 3721600);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_CrossCorrVisitor()  {
+
+    std::cout << "\nTesting CrossCorrVisitor{ } ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    CrossCorrVisitor<double, std::string>   cc(-16, 16);
+
+    df.single_act_visit<double, double>("IBM_Close", "IBM_Open", cc);
+
+    assert(cc.get_result().size() == 32);
+    assert(std::fabs(cc.get_result()[0] - 0.906) < 0.0001);
+    assert(std::fabs(cc.get_result()[1] - 0.9117) < 0.0001);
+    assert(std::fabs(cc.get_result()[15] - 0.9919) < 0.0001);
+    assert(std::fabs(cc.get_result()[16] - 0.9971) < 0.0001);
+    assert(std::fabs(cc.get_result()[30] - 0.9239) < 0.0001);
+    assert(std::fabs(cc.get_result()[31] - 0.9179) < 0.0001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_PartialAutoCorrVisitor()  {
+
+    std::cout << "\nTesting PartialAutoCorrVisitor{  } ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    PartialAutoCorrVisitor<double, std::string> pacf { 50 };
+
+    df.single_act_visit<double> ("IBM_Close", pacf);
+
+    assert(pacf.get_result().size() == 50);
+    assert(std::fabs(pacf.get_result()[0] - 1.0) < 0.000001);
+    assert(std::fabs(pacf.get_result()[1] - 0.998702) < 0.000001);
+    assert(std::fabs(pacf.get_result()[10] - 0.982394) < 0.000001);
+    assert(std::fabs(pacf.get_result()[30] - 0.982746) < 0.000001);
+    assert(std::fabs(pacf.get_result()[48] - 0.987028) < 0.000001);
+    assert(std::fabs(pacf.get_result()[49] - 0.987404) < 0.000001);
+
+    // Now multidimensional data
+    //
+    RandGenParams<double>   p;
+
+    p.seed = 123;
+    p.min_value = -3.0;
+    p.max_value = 3.0;
+
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+
+    // Generate and load 3 random columns
+    //
+    auto    rand_vec =
+        gen_uniform_real_dist<double>(df.get_index().size() * dim, p);
+
+    std::vector<ary_col_t>   array_col(df.get_index().size());
+
+    for (std::size_t i { 0 }, j { 0 }; j < rand_vec.size(); ++i)  {
+        for (std::size_t d { 0 }; d < dim; ++d)
+            array_col[i][d] = rand_vec[j++];
+    }
+    df.load_column<ary_col_t>("md_array_col", std::move(array_col));
+
+    PartialAutoCorrVisitor<ary_col_t, std::string>  md_pacf { 50 };
+
+    df.single_act_visit<ary_col_t>("md_array_col", md_pacf);
+
+    const auto  &md_result = md_pacf.get_result();
+
+    assert(md_result.size() == 50);
+    for (const auto &mtx : md_result)  {
+        assert(mtx.rows() == dim);
+        assert(mtx.rows() == dim);
+    }
+
+    // First one must be the identity matrix
+    //
+    for (long r = 0; r < md_result[0].rows(); ++r)  {
+        for (long c = 0; c < md_result[0].cols(); ++c)  {
+            if (r == c)
+                assert(md_result[0](r, c) == 1.0);
+            else
+                assert(md_result[0](r, c) == 0.0);
+        }
+    }
+    assert(std::fabs(md_result[1](0, 0) - 0.012183) < 0.000001);
+    assert(std::fabs(md_result[1](1, 2) - 0.003229) < 0.000001);
+    assert(std::fabs(md_result[31](1, 1) - -0.012368) < 0.000001);
+    assert(std::fabs(md_result[31](2, 0) - -0.01221) < 0.00001);
+    // assert(std::fabs(md_result[49](1, 0) - 0.000414) < 0.000001);
+    // assert(std::fabs(md_result[49](2, 2) - -0.002753) < 0.000001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_make_stationary()  {
+
+    std::cout << "\nTesting make_stationary( ) ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    auto    df2 = df;
+    auto    df3 = df;
+    auto    df4 = df;
+    auto    df5 = df;
+    auto    df6 = df;
+
+    df.make_stationary<double>("IBM_Close", stationary_method::differencing);
+
+    const auto  &close = df.get_column<double>("IBM_Close");
+
+    assert(close.size() == 5031);
+    assert(std::fabs(close[0] - 3.375) < 0.001);
+    assert(std::fabs(close[1] - 3.375) < 0.001);
+    assert(std::fabs(close[702] - 0.120003) < 0.0001);
+    assert(std::fabs(close[1695] - -1.34) < 0.001);
+    assert(std::fabs(close[5029] - 2.26) < 0.001);
+    assert(std::fabs(close[5030] - 2.75) < 0.001);
+
+    df2.make_stationary<double>("IBM_Close", stationary_method::log_trans);
+
+    const auto  &close2 = df2.get_column<double>("IBM_Close");
+
+    assert(close2.size() == 5031);
+    assert(std::fabs(close2[0] - 4.59069) < 0.0001);
+    assert(std::fabs(close2[1] - 4.62436) < 0.0001);
+    assert(std::fabs(close2[702] - 4.41848) < 0.0001);
+    assert(std::fabs(close2[1695] - 4.71752) < 0.0001);
+    assert(std::fabs(close2[5029] - 4.69052) < 0.0001);
+    assert(std::fabs(close2[5030] - 4.71546) < 0.0001);
+
+    df3.make_stationary<double>("IBM_Close", stationary_method::sqrt_trans);
+
+    const auto  &close3 = df3.get_column<double>("IBM_Close");
+
+    assert(close3.size() == 5031);
+    assert(std::fabs(close3[0] - 9.92786) < 0.0001);
+    assert(std::fabs(close3[1] - 10.0964) < 0.0001);
+    assert(std::fabs(close3[702] - 9.10879) < 0.0001);
+    assert(std::fabs(close3[1695] - 10.5778) < 0.0001);
+    assert(std::fabs(close3[5029] - 10.436) < 0.001);
+    assert(std::fabs(close3[5030] - 10.5669) < 0.0001);
+
+    df4.make_stationary<double>("IBM_Close",
+                                stationary_method::boxcox_trans,
+                                { .bc_type = box_cox_type::original,
+                                  .lambda = 1.5,
+                                  .is_all_positive = true });
+
+    const auto  &close4 = df4.get_column<double>("IBM_Close");
+
+    assert(close4.size() == 5031);
+    assert(std::fabs(close4[0] - 651.677) < 0.001);
+    assert(std::fabs(close4[1] - 685.469) < 0.001);
+    assert(std::fabs(close4[702] - 503.171) < 0.001);
+    assert(std::fabs(close4[1695] - 788.367) < 0.001);
+    assert(std::fabs(close4[5029] - 757.056) < 0.001);
+    assert(std::fabs(close4[5030] - 785.936) < 0.001);
+
+    df5.make_stationary<double>(
+        "IBM_Close",
+        stationary_method::decomposition,
+        { .season_period = 132,
+          .dcom_fraction = 0.6667,
+          .dcom_delta = 0,
+          .dcom_type = decompose_type::multiplicative });
+
+    const auto  &close5 = df5.get_column<double>("IBM_Close");
+
+    assert(close5.size() == 5031);
+    assert(std::fabs(close5[0] - 1.20614) < 0.0001);
+    assert(std::fabs(close5[1] - 1.2488) < 0.0001);
+    assert(std::fabs(close5[702] - 0.926802) < 0.0001);
+    assert(std::fabs(close5[1695] - 1.04238) < 0.0001);
+    assert(std::fabs(close5[5029] - 0.817188) < 0.001);
+    assert(std::fabs(close5[5030] - 0.836598) < 0.0001);
+
+    df6.make_stationary<double>("IBM_Close",
+                                stationary_method::smoothing,
+                                { .decay_spec = exponential_decay_spec::span,
+                                  .decay_alpha = 1.5,
+                                  .finite_adjust = true });
+
+    const auto  &close6 = df6.get_column<double>("IBM_Close");
+
+    assert(close6.size() == 5031);
+    assert(std::fabs(close6[0] - 98.5625) < 0.0001);
+    assert(std::fabs(close6[1] - 101.375) < 0.0001);
+    assert(std::fabs(close6[702] - 82.9529) < 0.0001);
+    assert(std::fabs(close6[1695] - 112.106) < 0.001);
+    assert(std::fabs(close6[5029] - 108.634) < 0.001);
+    assert(std::fabs(close6[5030] - 111.055) < 0.001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_StationaryCheckVisitor()  {
+
+    std::cout << "\nTesting StationaryCheckVisitor{  } ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    RandGenParams<double>   p;
+
+    p.mean = 0;
+    p.std = 1;
+    p.seed = 123;
+
+    df.load_column("normal_col",
+                   gen_normal_dist<double>(df.get_index().size(), p));
+
+    p.max_value = 1000;
+    p.min_value = -1000;
+    df.load_column("uniform col",
+                   gen_uniform_real_dist<double>(df.get_index().size(), p));
+
+    std::vector<double> log_close;
+
+    log_close.reserve(df.get_index().size());
+    for (const auto val : df.get_column<double>("IBM_Close"))
+        log_close.push_back(std::log(val));
+    df.load_column("log close", std::move(log_close));
+
+    DecomposeVisitor<double, std::string>   d_v (280, 0.6, 0.01);
+
+    df.single_act_visit<double>("IBM_Close", d_v);
+    df.load_column("residual close", std::move(d_v.get_residual()));
+
+    // KPSS tests
+    //
+    StationaryCheckVisitor<double, std::string> sc { stationary_test::kpss };
+
+    df.single_act_visit<double>("IBM_Close", sc);
+    assert(std::fabs(sc.get_kpss_value() - 63.5831) < 0.0001);
+    assert(sc.get_kpss_statistic() == 0);
+
+    df.single_act_visit<double>("normal_col", sc);
+    assert(sc.get_kpss_value() < 0.078);
+    assert(sc.get_kpss_statistic() == 0.1);
+
+    df.single_act_visit<double>("uniform col", sc);
+    assert(sc.get_kpss_value() < 0.08);
+    assert(sc.get_kpss_statistic() == 0.1);
+
+    df.single_act_visit<double>("log close", sc);
+    assert(sc.get_kpss_value() < 62.7013);
+    assert(sc.get_kpss_statistic() == 0);
+
+    df.single_act_visit<double>("residual close", sc);
+    assert(sc.get_kpss_value() < 46.41);
+    assert(sc.get_kpss_statistic() == 0);
+
+    // ADF tests
+    //
+    StationaryCheckVisitor<double, std::string> sc2 {
+        stationary_test::adf, { .adf_lag = 10, .adf_with_trend = false } };
+
+    df.single_act_visit<double>("IBM_Close", sc2);
+    assert(std::fabs(sc2.get_adf_statistic() - -1.80735) < 0.00001);
+
+    StationaryCheckVisitor<double, std::string> sc3 {
+        stationary_test::adf, { .adf_lag = 25, .adf_with_trend = false } };
+
+    df.single_act_visit<double>("IBM_Close", sc3);
+    assert(std::fabs(sc3.get_adf_statistic() - -1.59054) < 0.00001);
+
+    StationaryCheckVisitor<double, std::string> sc4 {
+        stationary_test::adf, { .adf_lag = 10, .adf_with_trend = false } };
+
+    df.single_act_visit<double>("normal_col", sc4);
+    assert(std::fabs(sc4.get_adf_statistic() - -21.1568) < 0.0001);
+
+    StationaryCheckVisitor<double, std::string> sc5 {
+        stationary_test::adf, { .adf_lag = 25, .adf_with_trend = false } };
+
+    df.single_act_visit<double>("normal_col", sc5);
+    assert(std::fabs(sc5.get_adf_statistic() - -13.5343) < 0.0001);
+
+    // ADF tests with trend
+    //
+    StationaryCheckVisitor<double, std::string> sc6 {
+        stationary_test::adf, { .adf_lag = 10, .adf_with_trend = true } };
+
+    df.single_act_visit<double>("IBM_Close", sc6);
+    assert(std::fabs(sc6.get_adf_statistic() - -1.83342) < 0.00001);
+
+    StationaryCheckVisitor<double, std::string> sc7 {
+        stationary_test::adf, { .adf_lag = 25, .adf_with_trend = true } };
+
+    df.single_act_visit<double>("IBM_Close", sc7);
+    assert(std::fabs(sc7.get_adf_statistic() - -1.38926) < 0.00001);
+
+    StationaryCheckVisitor<double, std::string> sc8 {
+        stationary_test::adf, { .adf_lag = 10, .adf_with_trend = true } };
+
+    df.single_act_visit<double>("normal_col", sc8);
+    assert(std::fabs(sc8.get_adf_statistic() - -21.155) < 0.001);
+
+    StationaryCheckVisitor<double, std::string> sc9 {
+        stationary_test::adf, { .adf_lag = 25, .adf_with_trend = true } };
+
+    df.single_act_visit<double>("normal_col", sc9);
+    assert(std::fabs(sc9.get_adf_statistic() - -13.5341) < 0.0001);
+
+    StationaryCheckVisitor<double, std::string> sc10 {
+        stationary_test::adf, { .adf_lag = 10, .adf_with_trend = true } };
+
+    df.single_act_visit<double>("log close", sc10);
+    assert(std::fabs(sc10.get_adf_statistic() - -2.21398) < 0.00001);
+
+    StationaryCheckVisitor<double, std::string> sc11 {
+        stationary_test::adf, { .adf_lag = 10, .adf_with_trend = true } };
+
+    df.single_act_visit<double>("residual close", sc11);
+    assert(std::fabs(sc11.get_adf_statistic() - -3.44574) < 0.00001);
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<ary_col_t>  stationary_ary  {
+        { 10.1,  5.0, -2.0 }, { 9.9,  5.2, -2.1 }, { 10.2,  4.9, -1.9 },
+        { 10.0,  5.1, -2.0 }, { 9.8,  5.0, -2.2 }, { 10.1,  5.3, -1.8 },
+        { 10.0,  4.8, -2.1 }, { 10.2,  5.1, -2.0 }, { 9.9,  5.0, -2.0 },
+        { 10.1,  5.2, -1.9 }, { 10.0,  4.9, -2.1 }, { 9.8,  5.1, -2.0 },
+        { 10.2,  5.0, -2.1 }
+    };
+    std::vector<vec_col_t>  stationary_vec  {
+        { 10.1,  5.0, -2.0 }, { 9.9,  5.2, -2.1 }, { 10.2,  4.9, -1.9 },
+        { 10.0,  5.1, -2.0 }, { 9.8,  5.0, -2.2 }, { 10.1,  5.3, -1.8 },
+        { 10.0,  4.8, -2.1 }, { 10.2,  5.1, -2.0 }, { 9.9,  5.0, -2.0 },
+        { 10.1,  5.2, -1.9 }, { 10.0,  4.9, -2.1 }, { 9.8,  5.1, -2.0 },
+        { 10.2,  5.0, -2.1 }
+    };
+    std::vector<vec_col_t>  non_stationary_vec  {
+        { 1.0,  10.0, -5.0 }, { 1.5,  10.5, -4.8 }, { 2.1,  11.0, -4.5 },
+        { 2.8,  11.8, -4.0 }, { 3.6,  12.5, -3.5 }, { 4.5,  13.3, -3.0 },
+        { 5.5,  14.2, -2.4 }, { 6.6,  15.0, -1.8 }, { 7.8,  16.1, -1.0 },
+        { 9.1,  17.3, -0.2 }, { 10.5,  18.6,  0.8 }, { 12.0,  20.0,  1.9 },
+        { 13.6,  21.5,  3.0 }
+    };
+    std::vector<ary_col_t>  non_stationary_ary  {
+        { 1.0,  10.0, -5.0 }, { 1.5,  10.5, -4.8 }, { 2.1,  11.0, -4.5 },
+        { 2.8,  11.8, -4.0 }, { 3.6,  12.5, -3.5 }, { 4.5,  13.3, -3.0 },
+        { 5.5,  14.2, -2.4 }, { 6.6,  15.0, -1.8 }, { 7.8,  16.1, -1.0 },
+        { 9.1,  17.3, -0.2 }, { 10.5,  18.6,  0.8 }, { 12.0,  20.0,  1.9 },
+        { 13.6,  21.5,  3.0 }
+    };
+
+    df.load_column<vec_col_t>("STATION VEC", std::move(stationary_vec),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("STATION ARY", std::move(stationary_ary),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("NON STATION VEC", std::move(non_stationary_vec),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("NON STATION ARY", std::move(non_stationary_ary),
+                              nan_policy::dont_pad_with_nans);
+
+    stac_v<vec_col_t, std::string>  adf_vec_v { stationary_test::adf };
+    stac_v<ary_col_t, std::string>  adf_ary_v { stationary_test::adf };
+    stac_v<vec_col_t, std::string>  kpss_vec_v { stationary_test::kpss };
+    stac_v<ary_col_t, std::string>  kpss_ary_v { stationary_test::kpss };
+
+    df.single_act_visit<vec_col_t>("STATION VEC", adf_vec_v);
+    df.single_act_visit<ary_col_t>("STATION ARY", adf_ary_v);
+    df.single_act_visit<vec_col_t>("STATION VEC", kpss_vec_v);
+    df.single_act_visit<ary_col_t>("STATION ARY", kpss_ary_v);
+
+    assert(adf_vec_v.get_adf_statistic().size() == dim);
+    assert(std::abs(adf_vec_v.get_adf_statistic()[0] - -3.55811) < 0.00001);
+    assert(std::abs(adf_vec_v.get_adf_statistic()[2] - -4.60884) < 0.00001);
+    assert(kpss_vec_v.get_kpss_statistic().size() == dim);
+    assert(std::abs(kpss_vec_v.get_kpss_statistic()[0] - 0.1) < 0.01);
+    assert(std::abs(kpss_vec_v.get_kpss_statistic()[2] - 0.1) < 0.01);
+    assert(kpss_vec_v.get_kpss_value().size() == dim);
+    assert(std::abs(kpss_vec_v.get_kpss_value()[0] - 0.033409) < 0.000001);
+    assert(std::abs(kpss_vec_v.get_kpss_value()[2] - 0.035666) < 0.000001);
+
+    df.single_act_visit<vec_col_t>("NON STATION VEC", adf_vec_v);
+    df.single_act_visit<ary_col_t>("NON STATION ARY", adf_ary_v);
+    df.single_act_visit<vec_col_t>("NON STATION VEC", kpss_vec_v);
+    df.single_act_visit<ary_col_t>("NON STATION ARY", kpss_ary_v);
+
+    assert(adf_vec_v.get_adf_statistic().size() == dim);
+    assert((std::abs(adf_vec_v.get_adf_statistic()[0] - 2.66413) < 0.00001 ||
+            std::abs(adf_vec_v.get_adf_statistic()[0] - 2.61647) < 0.00001));
+    assert(std::abs(adf_vec_v.get_adf_statistic()[2] - 2.64523) < 0.00001);
+    assert(kpss_vec_v.get_kpss_statistic().size() == dim);
+    assert(std::abs(kpss_vec_v.get_kpss_statistic()[0] - 0.1) < 0.01);
+    assert(std::abs(kpss_vec_v.get_kpss_statistic()[2] - 0.1) < 0.01);
+    assert(kpss_vec_v.get_kpss_value().size() == dim);
+    assert(std::abs(kpss_vec_v.get_kpss_value()[0] - 0.318681) < 0.000001);
+    assert(std::abs(kpss_vec_v.get_kpss_value()[2] - 0.311255) < 0.000001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_covariance_matrix()  {
+
+    std::cout << "\nTesting covariance_matrix( ) ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  cov_mat =
+        df.covariance_matrix<double>({ "IBM_Close", "IBM_Open",
+                                       "IBM_High", "IBM_Low" });
+
+    assert(cov_mat.rows() == 4);
+    assert(cov_mat.cols() == 4);
+    assert(std::fabs(cov_mat(0, 0) - 1467.58) < 0.01);
+    assert(std::fabs(cov_mat(0, 2) - 1469.69) < 0.01);
+    assert(std::fabs(cov_mat(2, 1) - 1469.48) < 0.01);
+    assert(std::fabs(cov_mat(2, 2) - 1472.86) < 0.01);
+    assert(std::fabs(cov_mat(3, 2) - 1466.15) < 0.01);
+    assert(std::fabs(cov_mat(3, 3) - 1461.0) < 0.01);
+
+    const auto  cov_mat2 =
+        df.covariance_matrix<double>({ "IBM_Close", "IBM_Open",
+                                       "IBM_High", "IBM_Low" },
+                                     normalization_type::z_score);
+
+    assert(cov_mat2.rows() == 4);
+    assert(cov_mat2.cols() == 4);
+    assert(std::fabs(cov_mat2(0, 0) - 1.0) < 0.01);
+    assert(std::fabs(cov_mat2(0, 2) - 0.99964) < 0.00001);
+    assert(std::fabs(cov_mat2(2, 1) - 0.99963) < 0.00001);
+    assert(std::fabs(cov_mat2(2, 2) - 1.0) < 0.01);
+    assert(std::fabs(cov_mat2(3, 2) - 0.99948) < 0.00001);
+    assert(std::fabs(cov_mat2(3, 3) - 1.0) < 0.01);
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<ary_col_t>  md_ary_col1  {
+        { 1.0, 2.0, 3.0 }, { 2.0, 4.0, 1.0 },
+        { 3.0, 1.0, 4.0 }, { 4.0, 3.0, 2.0 }
+    };
+    std::vector<ary_col_t>  md_ary_col2  {
+        { 4.0, 1.0, 2.0 }, { 6.0, 2.0, 4.0 },
+        { 5.0, 3.0, 1.0 }, { 7.0, 4.0, 3.0 }
+    };
+    std::vector<ary_col_t>  md_ary_col3  {
+        { 7.0, 3.0, 5.0 }, { 5.0, 1.0, 3.0 },
+        { 6.0, 4.0, 2.0 }, { 8.0, 2.0, 4.0 }
+    };
+
+    std::vector<vec_col_t>  md_vec_col1  {
+        { 1.0, 2.0, 3.0 }, { 2.0, 4.0, 1.0 },
+        { 3.0, 1.0, 4.0 }, { 4.0, 3.0, 2.0 }
+    };
+    std::vector<vec_col_t>  md_vec_col2  {
+        { 4.0, 1.0, 2.0 }, { 6.0, 2.0, 4.0 },
+        { 5.0, 3.0, 1.0 }, { 7.0, 4.0, 3.0 }
+    };
+    std::vector<vec_col_t>  md_vec_col3  {
+        { 7.0, 3.0, 5.0 }, { 5.0, 1.0, 3.0 },
+        { 6.0, 4.0, 2.0 }, { 8.0, 2.0, 4.0 }
+    };
+
+    df.load_column<ary_col_t>("ARY COL 1", std::move(md_ary_col1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("ARY COL 2", std::move(md_ary_col2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("ARY COL 3", std::move(md_ary_col3),
+                              nan_policy::dont_pad_with_nans);
+
+    df.load_column<vec_col_t>("VEC COL 1", std::move(md_vec_col1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC COL 2", std::move(md_vec_col2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC COL 3", std::move(md_vec_col3),
+                              nan_policy::dont_pad_with_nans);
+
+    const auto  ary_cov =
+        df.covariance_matrix<ary_col_t>(
+            { "ARY COL 1", "ARY COL 2", "ARY COL 3" },
+            normalization_type::z_score);
+    const auto  vec_cov =
+        df.covariance_matrix<vec_col_t>(
+            { "VEC COL 1", "VEC COL 2", "VEC COL 3" },
+            normalization_type::none);
+
+    assert(ary_cov.rows() == 9);
+    assert(ary_cov.cols() == 9);
+    assert(vec_cov.rows() == 9);
+    assert(vec_cov.cols() == 9);
+
+    assert(std::abs(ary_cov(0, 0) - 1.3333) < 0.0001);
+    assert(std::abs(ary_cov(0, 1) - 0.0) < 0.0001);
+    assert(std::abs(ary_cov(0, 2) - 0.0) < 0.0001);
+    assert(std::abs(ary_cov(0, 3) - 1.0667) < 0.0001);
+    assert(std::abs(ary_cov(3, 5) - 0.8) < 0.0001);
+    assert(std::abs(ary_cov(3, 6) - 0.2667) < 0.0001);
+    assert(std::abs(ary_cov(3, 8) - -0.2667) < 0.0001);
+    assert(std::abs(ary_cov(8, 0) - -0.5333) < 0.0001);
+    assert(std::abs(ary_cov(8, 4) - -0.5333) < 0.0001);
+    assert(std::abs(ary_cov(8, 7) - -0.2667) < 0.0001);
+    assert(std::abs(ary_cov(8, 8) - 1.3333) < 0.0001);
+
+    assert(std::abs(vec_cov(0, 0) - 1.6667) < 0.0001);
+    assert(std::abs(vec_cov(0, 1) - 0.0) < 0.0001);
+    assert(std::abs(vec_cov(0, 2) - 0.0) < 0.0001);
+    assert(std::abs(vec_cov(0, 3) - 1.3333) < 0.0001);
+    assert(std::abs(vec_cov(3, 5) - 1.0) < 0.0001);
+    assert(std::abs(vec_cov(3, 6) - 0.3333) < 0.0001);
+    assert(std::abs(vec_cov(3, 8) - -0.3333) < 0.0001);
+    assert(std::abs(vec_cov(8, 0) - -0.6667) < 0.0001);
+    assert(std::abs(vec_cov(8, 4) - -0.6667) < 0.0001);
+    assert(std::abs(vec_cov(8, 7) - -0.3333) < 0.0001);
+    assert(std::abs(vec_cov(8, 8) - 1.6667) < 0.0001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_pca_by_eigen()  {
+
+    std::cout << "\nTesting pca_by_eigen( ) ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  pca_mat = df.pca_by_eigen<double>(
+        { "IBM_Close", "IBM_Open", "IBM_High", "IBM_Low" });
+
+    // Dimensions were reduced to 1 containing at least 90% of the information.
+    // This makes sense, since these 4 columns are highly correlated.
+    //
+    assert(pca_mat.cols() == 1);
+    assert(pca_mat.rows() == 5031);
+    assert(std::fabs(pca_mat(0, 0) - 197.063) < 0.001);
+    assert(std::fabs(pca_mat(1, 0) - 200.875) < 0.001);
+    assert(std::fabs(pca_mat(491, 0) - 149.02) < 0.01);
+    assert(std::fabs(pca_mat(1348, 0) - 166.44) < 0.01);
+    assert(std::fabs(pca_mat(2677, 0) - 333.405) < 0.001);
+    assert(std::fabs(pca_mat(5029, 0) - 216.175) < 0.001);
+    assert(std::fabs(pca_mat(5030, 0) - 219.555) < 0.001);
+
+    const auto  pca_mat2 = df.pca_by_eigen<double>(
+        { "IBM_Close", "IBM_Open", "IBM_High", "IBM_Low" },
+        { .num_comp_to_keep = 3 });
+
+    // 3 most significant dimensions are kept.
+    // As you can see the first column is unchanged and clearly contains
+    // almost all of the information.
+    //
+    assert(pca_mat2.cols() == 3);
+    assert(pca_mat2.rows() == 5031);
+
+    assert(std::fabs(pca_mat2(0, 0) - 197.063) < 0.001);
+    assert(std::fabs(pca_mat2(0, 1) - -0.0951913) < 0.001);
+    assert(std::fabs(pca_mat2(0, 2) - 1.85473) < 0.001);
+
+    assert(std::fabs(pca_mat2(1, 0) - 200.875) < 0.001);
+    assert(std::fabs(pca_mat2(1, 1) - -2.08604) < 0.001);
+    assert(std::fabs(pca_mat2(1, 2) - 2.68895) < 0.001);
+
+    assert(std::fabs(pca_mat2(491, 0) - 149.02) < 0.01);
+    assert(std::fabs(pca_mat2(491, 1) - -1.34957) < 0.01);
+    assert(std::fabs(pca_mat2(491, 2) - 2.09026) < 0.01);
+
+    assert(std::fabs(pca_mat2(1348, 0) - 166.44) < 0.01);
+    assert(std::fabs(pca_mat2(1348, 1) - 0.0354559) < 0.01);
+    assert(std::fabs(pca_mat2(1348, 2) - 0.41972) < 0.01);
+
+    assert(std::fabs(pca_mat2(2677, 0) - 333.405) < 0.001);
+    assert(std::fabs(pca_mat2(2677, 1) - -1.33686) < 0.001);
+    assert(std::fabs(pca_mat2(2677, 2) - 2.13684) < 0.001);
+
+    assert(std::fabs(pca_mat2(5029, 0) - 216.175) < 0.001);
+    assert(std::fabs(pca_mat2(5029, 1) - -1.18141) < 0.001);
+    assert(std::fabs(pca_mat2(5029, 2) - 2.18029) < 0.001);
+
+    assert(std::fabs(pca_mat2(5030, 0) - 219.555) < 0.001);
+    assert(std::fabs(pca_mat2(5030, 1) - -2.66858) < 0.001);
+    assert(std::fabs(pca_mat2(5030, 2) - 2.85412) < 0.001);
+
+    // Now multidimensional data
+    //
+    using ary_col_t2 = std::array<double, 2>;
+    using ary_col_t3 = std::array<double, 3>;
+    using vec_col_t = std::vector<double>;
+
+    // 1) Variance is almost entirely in the x-component
+    //
+    std::vector<ary_col_t2> ary_xvar_1  {
+        { 1.0, 0.1 }, { 4.0, 0.2 }, { 7.0, 0.1 }, { 2.0, 0.0 },
+        { 3.0, 0.2 }, { 1.0, 0.1 }
+    };
+    std::vector<ary_col_t2> ary_xvar_2  {
+        { 2.0, 0.2 }, { 5.0, 0.0 }, { 8.0, 0.3 }, { 4.0, 0.1 },
+        { 6.0, 0.1 }, { 3.0, 0.0 }
+    };
+    std::vector<ary_col_t2> ary_xvar_3  {
+        { 3.0, -0.1 }, { 6.0, 0.1 }, { 9.0, -0.2 }, { 6.0, 0.2 },
+        { 9.0, -0.1 }, { 5.0, 0.1 }
+    };
+
+    std::vector<vec_col_t>  vec_xvar_1  {
+        { 1.0, 0.1 }, { 4.0, 0.2 }, { 7.0, 0.1 }, { 2.0, 0.0 },
+        { 3.0, 0.2 }, { 1.0, 0.1 }
+    };
+    std::vector<vec_col_t>  vec_xvar_2  {
+        { 2.0, 0.2 }, { 5.0, 0.0 }, { 8.0, 0.3 }, { 4.0, 0.1 },
+        { 6.0, 0.1 }, { 3.0, 0.0 }
+    };
+    std::vector<vec_col_t>  vec_xvar_3  {
+        { 3.0, -0.1 }, { 6.0, 0.1 }, { 9.0, -0.2 }, { 6.0, 0.2 },
+        { 9.0, -0.1 }, { 5.0, 0.1 }
+    };
+
+    df.load_column<ary_col_t2>("ARY XVAR 1", std::move(ary_xvar_1),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t2>("ARY XVAR 2", std::move(ary_xvar_2),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t2>("ARY XVAR 3", std::move(ary_xvar_3),
+                               nan_policy::dont_pad_with_nans);
+
+    df.load_column<vec_col_t>("VEC XVAR 1", std::move(vec_xvar_1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC XVAR 2", std::move(vec_xvar_2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC XVAR 3", std::move(vec_xvar_3),
+                              nan_policy::dont_pad_with_nans);
+
+    const auto  ary_xvar_res = df.pca_by_eigen<ary_col_t2>(
+        { "ARY XVAR 1", "ARY XVAR 2", "ARY XVAR 3" },
+        { .num_comp_to_keep = 1 });
+    const auto  vec_xvar_res = df.pca_by_eigen<vec_col_t>(
+        { "VEC XVAR 1", "VEC XVAR 2", "VEC XVAR 3" },
+        { .num_comp_to_keep = 1 });
+
+    assert(ary_xvar_res.cols() == 1);
+    assert(ary_xvar_res.rows() == 6);
+    assert(vec_xvar_res.cols() == 1);
+    assert(vec_xvar_res.rows() == 6);
+
+    assert(std::abs(ary_xvar_res(0, 0) - -2.98144) < 0.00001);
+    assert(std::abs(ary_xvar_res(3, 0) - -5.6686) < 0.0001);
+    assert(std::abs(ary_xvar_res(5, 0) - -4.2447) < 0.0001);
+    assert(std::abs(vec_xvar_res(0, 0) - -2.98144) < 0.00001);
+    assert(std::abs(vec_xvar_res(3, 0) - -5.6686) < 0.0001);
+    assert(std::abs(vec_xvar_res(5, 0) - -4.2447) < 0.0001);
+
+    // 2) x and y components carry equal but orthogonal variance
+    //
+    std::vector<ary_col_t2> ary_xyvar_1  {
+        { 1.0, 4.0 }, { 2.0, -4.0 }, { 3.0, 4.0 }, { 4.0, -4.0 },
+        { 1.5, 4.0 }, { 2.5, -4.0 }, { 3.5, 4.0 }, { 4.5, -4.0 }
+    };
+    std::vector<ary_col_t2> ary_xyvar_2  {
+        { 2.0, 3.0 }, { 4.0, -3.0 }, { 6.0, 3.0 }, { 8.0, -3.0 },
+        { 3.0, 3.0 }, { 5.0, -3.0 }, { 7.0, 3.0 }, { 9.0, -3.0 }
+    };
+    std::vector<ary_col_t2> ary_xyvar_3  {
+        { 3.0, 2.0 }, { 6.0, -2.0 }, { 9.0, 2.0 }, { 12.0, -2.0 },
+        { 4.5, 2.0 }, { 7.5, -2.0 }, { 10.5, 2.0 }, { 13.5, -2.0 }
+    };
+    std::vector<ary_col_t2> ary_xyvar_4  {
+        { 4.0, 1.0 }, { 8.0, -1.0 }, { 12.0, 1.0 }, { 16.0, -1.0 },
+        { 6.0, 1.0 }, { 10.0, -1.0 }, { 14.0, 1.0 }, { 18.0, -1.0 }
+    };
+
+    df.load_column<ary_col_t2>("ARY XYVAR 1", std::move(ary_xyvar_1),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t2>("ARY XYVAR 2", std::move(ary_xyvar_2),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t2>("ARY XYVAR 3", std::move(ary_xyvar_3),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t2>("ARY XYVAR 4", std::move(ary_xyvar_4),
+                               nan_policy::dont_pad_with_nans);
+
+    const auto  ary_xyvar_res = df.pca_by_eigen<ary_col_t2>(
+        { "ARY XYVAR 1", "ARY XYVAR 2", "ARY XYVAR 3", "ARY XYVAR 4" },
+        { .pct_comp_to_keep = 0.95 });
+
+    assert(ary_xyvar_res.cols() == 2);
+    assert(ary_xyvar_res.rows() == 8);
+
+    assert(std::abs(ary_xyvar_res(0, 0) - 0.0) < 0.00000000001);
+    assert(std::abs(ary_xyvar_res(0, 1) - -7.07107) < 0.0001);
+    assert(std::abs(ary_xyvar_res(3, 1) - -10.6066) < 0.0001);
+    assert(std::abs(ary_xyvar_res(5, 0) - -12.3744) < 0.0001);
+    assert(std::abs(ary_xyvar_res(7, 0) - -19.4454) < 0.0001);
+    assert(std::abs(ary_xyvar_res(7, 1) - -12.3744) < 0.0001);
+
+    // 3) Redundant component (rank-deficient). cOmponent 2 is always x + y
+    //
+    std::vector<ary_col_t3> ary_red_1  {
+        { 1.0, 2.0, 3.0 }, { 2.0, 3.0, 5.0 }, { 3.0, 1.0, 4.0 },
+        { 4.0, 2.0, 6.0 }, { 5.0, 3.0, 8.0 }, { 6.0, 1.0, 7.0 }
+    };
+    std::vector<ary_col_t3> ary_red_2  {
+        { 2.0, 1.0, 3.0 }, { 3.0, 2.0, 5.0 }, { 4.0, 3.0, 7.0 },
+        { 5.0, 4.0, 9.0 }, { 6.0, 2.0, 8.0 }, { 7.0, 3.0, 10.0 }
+    };
+    std::vector<ary_col_t3> ary_red_3  {
+        { 3.0, 3.0, 6.0 }, { 4.0, 4.0, 8.0 }, { 5.0, 2.0, 7.0 },
+        { 6.0, 1.0, 7.0 }, { 7.0, 3.0, 10.0 }, { 8.0, 2.0, 10.0 }
+    };
+    std::vector<ary_col_t3> ary_red_4  {
+        { 4.0, 2.0, 6.0 }, { 5.0, 3.0, 8.0 }, { 6.0, 1.0, 7.0 },
+        { 7.0, 2.0, 9.0 }, { 8.0, 4.0, 12.0 }, { 9.0, 1.0, 10.0 }
+    };
+
+    df.load_column<ary_col_t3>("ARY RED 1", std::move(ary_red_1),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t3>("ARY RED 2", std::move(ary_red_2),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t3>("ARY RED 3", std::move(ary_red_3),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t3>("ARY RED 4", std::move(ary_red_4),
+                               nan_policy::dont_pad_with_nans);
+
+    const auto  ary_red_res = df.pca_by_eigen<ary_col_t3>(
+        { "ARY RED 1", "ARY RED 2", "ARY RED 3", "ARY RED 4" },
+        { .num_comp_to_keep = 4 });
+
+    assert(ary_red_res.cols() == 4);
+    assert(ary_red_res.rows() == 6);
+    assert(std::abs(ary_red_res(0, 0) - 8.77192) < 0.00001);
+    assert(std::abs(ary_red_res(0, 2) - 1.20476) < 0.00001);
+    assert(std::abs(ary_red_res(3, 1) - 5.40356) < 0.00001);
+    assert(std::abs(ary_red_res(3, 2) - -0.937747) < 0.000001);
+    assert(std::abs(ary_red_res(5, 0) - 22.7284) < 0.0001);
+    assert(std::abs(ary_red_res(5, 1) - 6.16921) < 0.00001);
+    assert(std::abs(ary_red_res(5, 3) - 3.43023) < 0.00001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_compact_svd()  {
+
+    std::cout << "\nTesting compact_svd( ) ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  [U, S, V] =
+        df.compact_svd<double>(
+            { "IBM_Close", "IBM_Open", "IBM_High", "IBM_Low" });
+
+    assert(U.rows() == 5031);
+    // Compact version has the same column # as the original matrix
+    //
+    assert(U.cols() == 4);
+    assert(std::fabs(U(0, 0) - -0.0115747) < 0.000001);
+    assert(std::fabs(U(2, 3) - -0.0110622) < 0.000001);
+    assert(std::fabs(U(4040, 2) - -0.0147074) < 0.000001);
+    assert(std::fabs(U(4994, 1) - 0.0194639) < 0.000001);
+    assert(std::fabs(U(5030, 3) - -0.000878688) < 0.000001);
+
+    // In compact version zero rows at the end are omitted
+    //
+    assert(S.rows() == 4);
+    assert(S.cols() == 4);
+    assert(std::fabs(S(0, 0) - 141.821) < 0.001);
+    assert(std::fabs(S(1, 1) - 1.91734) < 0.00001);
+    assert(std::fabs(S(2, 2) - 1.62214) < 0.00001);
+    assert(std::fabs(S(3, 3) - 0.73194) < 0.00001);
+    assert(S(0, 2) == 0.0);
+    assert(S(1, 2) == 0.0);
+    assert(S(3, 0) == 0.0);
+
+    assert(V.rows() == 4);
+    assert(V.cols() == 4);
+    assert(std::fabs(V(0, 0) - 0.499988) < 0.000001);
+    assert(std::fabs(V(0, 2) - 0.003710) < 0.000001);
+    assert(std::fabs(V(2, 2) - 0.700869) < 0.000001);
+    assert(std::fabs(V(3, 1) - -0.00079) < 0.000001);
+    assert(std::fabs(V(3, 3) - 0.491216) < 0.000001);
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<ary_col_t>  md_ary_col1  {
+        {3,1,3}, {3,4,3}, {6,3,2}, {4,4,7}, {4,1,5}, {4,6,1}, {8,2,6}, {7,8,4},
+        {8,3,1}, {7,4,6}, {5,4,3}, {8,6,4}, {4,5,3}, {2,4,2}, {5,5,4}, {1,4,4},
+        {2,3,1}, {8,1,7}, {1,1,2}, {5,8,1}, {1,4,5}, {7,8,2}, {8,8,3}, {7,3,6},
+        {5,6,5}, {4,4,1}, {2,1,2}, {1,6,5}, {1,6,7}, {6,4,4},
+    };
+    std::vector<ary_col_t>  md_ary_col2  {
+        {1,7,3}, {5,7,3}, {4,5,3}, {6,4,2}, {3,7,3}, {4,3,1}, {8,8,6}, {4,8,7},
+        {3,6,7}, {1,6,8}, {2,5,4}, {2,2,2}, {6,2,8}, {3,2,8}, {7,5,4}, {4,2,1},
+        {3,3,3}, {8,3,2}, {4,8,5}, {6,2,6}, {8,8,2}, {7,3,6}, {1,7,7}, {7,8,8},
+        {7,5,7}, {1,3,4}, {5,4,1}, {5,1,8}, {2,3,2}, {5,6,2},
+    };
+    std::vector<ary_col_t>  md_ary_col3  {
+        {5,2,5}, {7,7,6}, {1,4,6}, {3,1,5}, {5,6,8}, {6,2,1}, {3,4,3}, {7,4,1},
+        {6,7,5}, {2,6,2}, {1,6,6}, {1,3,8}, {5,4,7}, {4,5,1}, {7,6,6}, {5,6,2},
+        {2,3,5}, {5,8,2}, {8,1,4}, {6,3,7}, {1,1,8}, {7,2,7}, {6,3,2}, {1,6,7},
+        {4,1,2}, {3,4,5}, {7,1,6}, {5,8,5}, {8,8,7}, {8,8,8},
+    };
+
+    std::vector<vec_col_t>  md_vec_col1  {
+        {3,1,3}, {3,4,3}, {6,3,2}, {4,4,7}, {4,1,5}, {4,6,1}, {8,2,6}, {7,8,4},
+        {8,3,1}, {7,4,6}, {5,4,3}, {8,6,4}, {4,5,3}, {2,4,2}, {5,5,4}, {1,4,4},
+        {2,3,1}, {8,1,7}, {1,1,2}, {5,8,1}, {1,4,5}, {7,8,2}, {8,8,3}, {7,3,6},
+        {5,6,5}, {4,4,1}, {2,1,2}, {1,6,5}, {1,6,7}, {6,4,4},
+    };
+    std::vector<vec_col_t>  md_vec_col2  {
+        {1,7,3}, {5,7,3}, {4,5,3}, {6,4,2}, {3,7,3}, {4,3,1}, {8,8,6}, {4,8,7},
+        {3,6,7}, {1,6,8}, {2,5,4}, {2,2,2}, {6,2,8}, {3,2,8}, {7,5,4}, {4,2,1},
+        {3,3,3}, {8,3,2}, {4,8,5}, {6,2,6}, {8,8,2}, {7,3,6}, {1,7,7}, {7,8,8},
+        {7,5,7}, {1,3,4}, {5,4,1}, {5,1,8}, {2,3,2}, {5,6,2},
+    };
+    std::vector<vec_col_t>  md_vec_col3  {
+        {5,2,5}, {7,7,6}, {1,4,6}, {3,1,5}, {5,6,8}, {6,2,1}, {3,4,3}, {7,4,1},
+        {6,7,5}, {2,6,2}, {1,6,6}, {1,3,8}, {5,4,7}, {4,5,1}, {7,6,6}, {5,6,2},
+        {2,3,5}, {5,8,2}, {8,1,4}, {6,3,7}, {1,1,8}, {7,2,7}, {6,3,2}, {1,6,7},
+        {4,1,2}, {3,4,5}, {7,1,6}, {5,8,5}, {8,8,7}, {8,8,8},
+    };
+
+    df.load_column<ary_col_t>("ARY COL 1", std::move(md_ary_col1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("ARY COL 2", std::move(md_ary_col2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("ARY COL 3", std::move(md_ary_col3),
+                              nan_policy::dont_pad_with_nans);
+
+    df.load_column<vec_col_t>("VEC COL 1", std::move(md_vec_col1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC COL 2", std::move(md_vec_col2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC COL 3", std::move(md_vec_col3),
+                              nan_policy::dont_pad_with_nans);
+
+    const auto  [ary_U, ary_S, ary_V] =
+        df.compact_svd<ary_col_t>({ "ARY COL 1", "ARY COL 2", "ARY COL 3" });
+    const auto  [vec_U, vec_S, vec_V] =
+        df.compact_svd<vec_col_t>({ "VEC COL 1", "VEC COL 2", "VEC COL 3" });
+
+    assert(ary_U.rows() == 30);
+    assert(ary_U.cols() == 9);
+    assert(vec_U.rows() == 30);
+    assert(vec_U.cols() == 9);
+    assert(std::fabs(ary_U(0, 0) - 0.18325) < 0.00001);
+    assert(std::fabs(ary_U(0, 5) - 0.063227) < 0.000001);
+    assert(std::fabs(ary_U(5, 2) - 0.094879) < 0.000001);
+    assert(std::fabs(ary_U(5, 6) - 0.338979) < 0.000001);
+    assert(std::fabs(ary_U(29, 0) - 0.006552) < 0.000001);
+    assert(std::fabs(ary_U(29, 4) - -0.134926) < 0.000001);
+    assert(std::fabs(ary_U(29, 8) - 0.075926) < 0.000001);
+    assert(std::fabs(vec_U(0, 0) - 0.18325) < 0.00001);
+    assert(std::fabs(vec_U(0, 5) - 0.063227) < 0.000001);
+    assert(std::fabs(vec_U(5, 2) - 0.094879) < 0.000001);
+    assert(std::fabs(vec_U(5, 6) - 0.338979) < 0.000001);
+    assert(std::fabs(vec_U(29, 0) - 0.006552) < 0.000001);
+    assert(std::fabs(vec_U(29, 4) - -0.134926) < 0.000001);
+    assert(std::fabs(vec_U(29, 8) - 0.075926) < 0.000001);
+
+    assert(ary_S.rows() == 9);
+    assert(ary_S.cols() == 9);
+    assert(vec_S.rows() == 9);
+    assert(vec_S.cols() == 9);
+    assert(std::fabs(ary_S(0, 0) - 7.08301) < 0.00001);
+    assert(std::fabs(ary_S(1, 1) - 6.97274) < 0.00001);
+    assert(std::fabs(ary_S(4, 4) - 5.57452) < 0.00001);
+    assert(std::fabs(ary_S(8, 8) - 2.63947) < 0.00001);
+    assert(std::fabs(ary_S(0, 1) - 0.0) < 0.00000001);
+    assert(std::fabs(ary_S(4, 5) - 0.0) < 0.00000001);
+    assert(std::fabs(ary_S(8, 0) - 0.0) < 0.00000001);
+    assert(std::fabs(ary_S(8, 5) - 0.0) < 0.00000001);
+    assert(std::fabs(vec_S(0, 0) - 7.08301) < 0.00001);
+    assert(std::fabs(vec_S(1, 1) - 6.97274) < 0.00001);
+    assert(std::fabs(vec_S(4, 4) - 5.57452) < 0.00001);
+    assert(std::fabs(vec_S(8, 8) - 2.63947) < 0.00001);
+    assert(std::fabs(vec_S(0, 1) - 0.0) < 0.00000001);
+    assert(std::fabs(vec_S(4, 5) - 0.0) < 0.00000001);
+    assert(std::fabs(vec_S(8, 0) - 0.0) < 0.00000001);
+    assert(std::fabs(vec_S(8, 5) - 0.0) < 0.00000001);
+
+    assert(ary_V.rows() == 9);
+    assert(ary_V.cols() == 9);
+    assert(vec_V.rows() == 9);
+    assert(vec_V.cols() == 9);
+    assert(std::fabs(ary_V(0, 0) - -0.57947) < 0.00001);
+    assert(std::fabs(ary_V(0, 5) - 0.32352) < 0.00001);
+    assert(std::fabs(ary_V(6, 3) - -0.03933) < 0.00001);
+    assert(std::fabs(ary_V(6, 8) - -0.34836) < 0.00001);
+    assert(std::fabs(ary_V(8, 1) - -0.314893) < 0.000001);
+    assert(std::fabs(ary_V(8, 6) - -0.200483) < 0.000001);
+    assert(std::fabs(vec_V(0, 0) - -0.57947) < 0.00001);
+    assert(std::fabs(vec_V(0, 5) - 0.32352) < 0.00001);
+    assert(std::fabs(vec_V(6, 3) - -0.03933) < 0.00001);
+    assert(std::fabs(vec_V(6, 8) - -0.34836) < 0.00001);
+    assert(std::fabs(vec_V(8, 1) - -0.314893) < 0.000001);
+    assert(std::fabs(vec_V(8, 6) - -0.200483) < 0.000001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_SpectralClusteringVisitor()  {
+
+    std::cout << "\nTesting SpectralClusteringVisitor{ } ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.csv", io_format::csv2,
+                 { .starting_row = 0, .num_rows = 1000 });
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    spect_v<4, double, std::string> spc(1000, 7, 123);
+
+    df.single_act_visit<double>("IBM_Close", spc);
+
+    const auto  &clusters = spc.get_result();
+
+    assert(clusters.size() == 4);
+
+    assert(clusters[0].size() == 89);
+    assert(clusters[1].size() == 688);
+    assert(clusters[2].size() == 208);
+    assert(clusters[3].size() == 15);
+
+    assert(std::fabs(clusters[0][0] - 177.9) < 0.001);
+    assert(std::fabs(clusters[0][23] - 171.12) < 0.001);
+    assert(std::fabs(clusters[0][61] - 177.18) < 0.001);
+    assert(std::fabs(clusters[0][88] - 170.05) < 0.001);
+
+    assert(std::fabs(clusters[1][0] - 169.1) < 0.001);
+    assert(std::fabs(clusters[1][300] - 140.19) < 0.001);
+    assert(std::fabs(clusters[1][542] - 152.51) < 0.001);
+    assert(std::fabs(clusters[1][687] - 153.23) < 0.001);
+
+    assert(std::fabs(clusters[2][0] - 185.53) < 0.001);
+    assert(std::fabs(clusters[2][100] - 181.22) < 0.001);
+    assert(std::fabs(clusters[2][200] - 179.4) < 0.001);
+    assert(std::fabs(clusters[2][207] - 179.45) < 0.001);
+
+    assert(std::fabs(clusters[3][0] - 121.86) < 0.001);
+    assert(std::fabs(clusters[3][8] - 124.83) < 0.001);
+    assert(std::fabs(clusters[3][12] - 120.19) < 0.001);
+    assert(std::fabs(clusters[3][14] - 122.74) < 0.001);
+
+    // Now multidimensional data
+    //
+    RandGenParams<double>   p;
+
+    p.seed = 123;
+    p.min_value = -20.0;
+    p.max_value = 20.0;
+
+    using col_t = std::array<double, 3>;
+
+    auto    rand_vec =
+        gen_uniform_real_dist<double>(df.get_index().size() * 3, p);
+
+    std::vector<col_t>  multi_dimen_col(df.get_index().size());
+
+    for (std::size_t i { 0 }, j { 0 }; j < rand_vec.size(); ++i)  {
+        multi_dimen_col[i][0] = rand_vec[j++];
+        multi_dimen_col[i][1] = rand_vec[j++];
+        multi_dimen_col[i][2] = rand_vec[j++];
+    }
+    df.load_column<col_t>("multi_dimen_col", std::move(multi_dimen_col));
+
+    spect_v<4, col_t, std::string>  md_spc(1000, 7, 123);
+
+    // This is the default similarity function for multidimensional data.
+    // But I am setting it here for testing and illustration.
+    //
+    md_spc.set_sim_func(
+        [](const col_t &x, const col_t &y, double sigma) -> double  {
+            double sum { 0 };
+
+            for (std::size_t i { 0 }; i < x.size(); ++i)  {
+                const double    diff { x[i] - y[i] };
+
+                sum += diff * diff;
+            }
+            return (std::exp(-sum / (2 * sigma * sigma)));
+        });
+    df.single_act_visit<col_t>("multi_dimen_col", md_spc);
+
+    const auto  &md_clusters = md_spc.get_result();
+
+    assert(md_clusters.size() == 4);
+    assert(md_spc.get_clusters_idxs()[0].size() == 327);
+    assert(md_spc.get_clusters_idxs()[1].size() == 206);
+    assert(md_spc.get_clusters_idxs()[2].size() == 253);
+    assert(md_spc.get_clusters_idxs()[3].size() == 214);
+    assert((md_spc.get_clusters_idxs()[0].size() +
+            md_spc.get_clusters_idxs()[1].size() +
+            md_spc.get_clusters_idxs()[2].size() +
+            md_spc.get_clusters_idxs()[3].size() == df.get_index().size()));
+
+    assert(std::fabs(md_spc.get_result()[0][5][0] - 16.4466) < 0.0001);
+    assert(std::fabs(md_spc.get_result()[0][5][1] - -2.12685) < 0.00001);
+    assert(std::fabs(md_spc.get_result()[0][5][2] - 8.58622) < 0.00001);
+    assert(std::fabs(md_spc.get_result()[2][5][0] - 5.05986) < 0.00001);
+    assert(std::fabs(md_spc.get_result()[2][5][1] - -1.57193) < 0.00001);
+    assert(std::fabs(md_spc.get_result()[2][5][2] - -7.64881) < 0.00001);
+    assert(std::fabs(md_spc.get_result()[3][7][0] - -19.7594) < 0.0001);
+    assert(std::fabs(md_spc.get_result()[3][7][1] - 8.27358) < 0.00001);
+    assert(std::fabs(md_spc.get_result()[3][7][2] - -6.11494) < 0.00001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_get_data_by_spectral()  {
+
+    std::cout << "\nTesting get_data_by_spectral( ) ..." << std::endl;
+
+    typedef StdDataFrame64<std::string> StrDataFrame;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("SHORT_IBM.csv", io_format::csv2,
+                 { .starting_row = 1000, .num_rows = 500 });
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    StrDataFrame    df2 = df;
+
+    auto    lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double, long>
+            ("IBM_Open", lbd);
+
+    auto    result_df =
+        df.get_data_by_spectral <3, double, double, long>("IBM_Close", 8, 89);
+    auto    result_view =
+        view.get_view_by_spectral<3, double, double, long>("IBM_Close", 8, 89);
+
+    assert(result_df.size() == 3);
+    assert(result_df.size() == result_view.size());
+
+    assert(result_df[0].get_index().size() == 47);
+    assert(result_df[0].get_column<double>("IBM_Open").size() == 47);
+    assert(result_df[0].get_index()[0] == "2018-10-29");
+    assert(result_df[0].get_index()[46] == "2019-01-22");
+    assert(result_df[0].get_column<double>("IBM_High")[20] == 121.68);
+    assert(result_df[0].get_column<long>("IBM_Volume")[35] == 4346700);
+    assert(result_view[0].get_index().size() == 47);
+    assert(result_view[0].get_column<double>("IBM_Open").size() == 47);
+    assert(result_view[0].get_index()[0] == "2018-10-29");
+    assert(result_view[0].get_index()[46] == "2019-01-22");
+    assert(result_view[0].get_column<double>("IBM_High")[20] == 121.68);
+    assert(result_view[0].get_column<long>("IBM_Volume")[35] == 4346700);
+
+    assert(result_df[1].get_index().size() == 1);
+    assert(result_df[1].get_column<double>("IBM_Open").size() == 1);
+    assert(result_df[1].get_index()[0] == "2018-12-24");
+    assert(result_df[1].get_column<double>("IBM_High")[0] == 111.0);
+    assert(result_df[1].get_column<long>("IBM_Volume")[0] == 3821400);
+    assert(result_view[1].get_column<double>("IBM_High")[0] == 111.0);
+    assert(result_view[1].get_column<long>("IBM_Volume")[0] == 3821400);
+
+    assert(result_df[2].get_index().size() == 452);
+    assert(result_df[2].get_column<double>("IBM_Open").size() == 452);
+    assert(result_df[2].get_index()[0] == "2017-12-20");
+    assert(result_df[2].get_index()[451] == "2019-12-16");
+    assert(result_df[2].get_column<double>("IBM_High")[200] == 149.070007);
+    assert(result_df[2].get_column<long>("IBM_Volume")[300] == 4958000);
+    assert(result_view[2].get_index().size() == 452);
+    assert(result_view[2].get_column<double>("IBM_Open").size() == 452);
+    assert(result_view[2].get_index()[0] == "2017-12-20");
+    assert(result_view[2].get_index()[451] == "2019-12-16");
+    assert(result_view[2].get_column<double>("IBM_High")[200] == 149.070007);
+    assert(result_view[2].get_column<long>("IBM_Volume")[300] == 4958000);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_canon_corr()  {
+
+    std::cout << "\nTesting canon_corr( ) ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  result = df.canon_corr<double>({ "IBM_Close", "IBM_Open" },
+                                               { "IBM_High", "IBM_Low" });
+
+    assert(result.coeffs.size() == 2);
+    assert(std::fabs(result.coeffs[0] - 0.999962) < 0.000001);
+    assert(std::fabs(result.coeffs[1] - 0.001256) < 0.000001);
+    assert(std::fabs(result.x_red_idx - 0.853052) < 0.000001);
+    assert(std::fabs(result.y_red_idx - 0.729354) < 0.000001);
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<ary_col_t>  md_ary_col1  {
+        {3,1,3}, {3,4,3}, {6,3,2}, {4,4,7}, {4,1,5}, {4,6,1}, {8,2,6}, {7,8,4},
+        {8,3,1}, {7,4,6}, {5,4,3}, {8,6,4}, {4,5,3}, {2,4,2}, {5,5,4}, {1,4,4},
+        {2,3,1}, {8,1,7}, {1,1,2}, {5,8,1}, {1,4,5}, {7,8,2}, {8,8,3}, {7,3,6},
+        {5,6,5}, {4,4,1}, {2,1,2}, {1,6,5}, {1,6,7}, {6,4,4},
+    };
+    std::vector<ary_col_t>  md_ary_col2  {
+        {1,7,3}, {5,7,3}, {4,5,3}, {6,4,2}, {3,7,3}, {4,3,1}, {8,8,6}, {4,8,7},
+        {3,6,7}, {1,6,8}, {2,5,4}, {2,2,2}, {6,2,8}, {3,2,8}, {7,5,4}, {4,2,1},
+        {3,3,3}, {8,3,2}, {4,8,5}, {6,2,6}, {8,8,2}, {7,3,6}, {1,7,7}, {7,8,8},
+        {7,5,7}, {1,3,4}, {5,4,1}, {5,1,8}, {2,3,2}, {5,6,2},
+    };
+    std::vector<ary_col_t>  md_ary_col3  {
+        {5,2,5}, {7,7,6}, {1,4,6}, {3,1,5}, {5,6,8}, {6,2,1}, {3,4,3}, {7,4,1},
+        {6,7,5}, {2,6,2}, {1,6,6}, {1,3,8}, {5,4,7}, {4,5,1}, {7,6,6}, {5,6,2},
+        {2,3,5}, {5,8,2}, {8,1,4}, {6,3,7}, {1,1,8}, {7,2,7}, {6,3,2}, {1,6,7},
+        {4,1,2}, {3,4,5}, {7,1,6}, {5,8,5}, {8,8,7}, {8,8,8},
+    };
+
+    std::vector<vec_col_t>  md_vec_col1  {
+        {3,1,3}, {3,4,3}, {6,3,2}, {4,4,7}, {4,1,5}, {4,6,1}, {8,2,6}, {7,8,4},
+        {8,3,1}, {7,4,6}, {5,4,3}, {8,6,4}, {4,5,3}, {2,4,2}, {5,5,4}, {1,4,4},
+        {2,3,1}, {8,1,7}, {1,1,2}, {5,8,1}, {1,4,5}, {7,8,2}, {8,8,3}, {7,3,6},
+        {5,6,5}, {4,4,1}, {2,1,2}, {1,6,5}, {1,6,7}, {6,4,4},
+    };
+    std::vector<vec_col_t>  md_vec_col2  {
+        {1,7,3}, {5,7,3}, {4,5,3}, {6,4,2}, {3,7,3}, {4,3,1}, {8,8,6}, {4,8,7},
+        {3,6,7}, {1,6,8}, {2,5,4}, {2,2,2}, {6,2,8}, {3,2,8}, {7,5,4}, {4,2,1},
+        {3,3,3}, {8,3,2}, {4,8,5}, {6,2,6}, {8,8,2}, {7,3,6}, {1,7,7}, {7,8,8},
+        {7,5,7}, {1,3,4}, {5,4,1}, {5,1,8}, {2,3,2}, {5,6,2},
+    };
+    std::vector<vec_col_t>  md_vec_col3  {
+        {5,2,5}, {7,7,6}, {1,4,6}, {3,1,5}, {5,6,8}, {6,2,1}, {3,4,3}, {7,4,1},
+        {6,7,5}, {2,6,2}, {1,6,6}, {1,3,8}, {5,4,7}, {4,5,1}, {7,6,6}, {5,6,2},
+        {2,3,5}, {5,8,2}, {8,1,4}, {6,3,7}, {1,1,8}, {7,2,7}, {6,3,2}, {1,6,7},
+        {4,1,2}, {3,4,5}, {7,1,6}, {5,8,5}, {8,8,7}, {8,8,8},
+    };
+
+    df.load_column<ary_col_t>("ARY COL 1", std::move(md_ary_col1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("ARY COL 2", std::move(md_ary_col2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("ARY COL 3", std::move(md_ary_col3),
+                              nan_policy::dont_pad_with_nans);
+
+    df.load_column<vec_col_t>("VEC COL 1", std::move(md_vec_col1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC COL 2", std::move(md_vec_col2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC COL 3", std::move(md_vec_col3),
+                              nan_policy::dont_pad_with_nans);
+
+    const auto  ary_res =
+        df.canon_corr<ary_col_t>({ "ARY COL 1", "ARY COL 2" },
+                                 { "ARY COL 1", "ARY COL 3" });
+    const auto  vec_res =
+        df.canon_corr<vec_col_t>({ "VEC COL 1", "VEC COL 2" },
+                                 { "VEC COL 1", "VEC COL 3" });
+
+    assert(ary_res.coeffs.size() == 2 * dim);
+    assert(vec_res.coeffs.size() == 2 * dim);
+
+    assert(std::fabs(ary_res.coeffs[0] - 1.04006) < 0.00001);
+    assert(std::fabs(ary_res.coeffs[2] - 1.01905) < 0.00001);
+    assert(std::fabs(ary_res.coeffs[4] - 0.158262) < 0.000001);
+    assert(std::fabs(ary_res.coeffs[5] - 0.015345) < 0.000001);
+    assert(std::fabs(vec_res.coeffs[0] - 1.04006) < 0.00001);
+    assert(std::fabs(vec_res.coeffs[2] - 1.01905) < 0.00001);
+    assert(std::fabs(vec_res.coeffs[4] - 0.158262) < 0.000001);
+    assert(std::fabs(vec_res.coeffs[5] - 0.015345) < 0.000001);
+
+    assert(std::fabs(ary_res.x_red_idx - 0.485319) < 0.000001);
+    assert(std::fabs(ary_res.y_red_idx - 0.53155) < 0.00001);
+    assert(std::fabs(vec_res.x_red_idx - 0.485319) < 0.000001);
+    assert(std::fabs(vec_res.y_red_idx - 0.53155) < 0.00001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_MC_station_dist()  {
+
+    std::cout << "\nTesting MC_station_dist( ) ..." << std::endl;
+
+    const std::size_t   item_cnt = 20;
+    MyDataFrame         df;
+
+    df.load_index(MyDataFrame::gen_sequence_index(0, item_cnt, 1));
+
+    RandGenParams<double>       p;
+    std::vector<const char *>   col_names (item_cnt, nullptr);
+
+    p.seed = 16;
+    df.load_column("0_col_name", gen_normal_dist<double, 256>(item_cnt, p));
+    for (std::size_t i = 1; i < item_cnt; ++i)  {
+        p.seed = i;
+        df.load_column((std::to_string(i) + "_col_name").c_str(),
+                       gen_normal_dist<double, 256>(item_cnt, p));
+    }
+    for (std::size_t i = 0; i < item_cnt; ++i)
+        col_names[i] = df.col_idx_to_name(i);
+
+    // This call with raw columns as input to the process makes no sense. I am
+    // calling it here as an anchor for calculation results.
+    //
+    const auto  result1 =
+        df.MC_station_dist<double>(
+            std::forward<std::vector<const char *>>(col_names), false);
+
+    assert(result1.size() == 20);
+    assert(std::fabs(result1[0] - -0.45676) < 0.000001);
+    assert(std::fabs(result1[5] - -0.0338666) < 0.000001);
+    assert(std::fabs(result1[15] - -0.10117) < 0.000001);
+    assert(std::fabs(result1[19] - 0.232359) < 0.000001);
+
+    // This is the correct way of calling it which returns the results that
+    // make sense.
+    //
+    const auto  result2 =
+        df.MC_station_dist<double>(
+            std::forward<std::vector<const char *>>(col_names), true);
+
+    assert(result2.size() == 6);
+    assert(std::fabs(result2[0] - 0.182232) < 0.000001);
+    assert(std::fabs(result2[2] - 0.145786) < 0.000001);
+    assert(std::fabs(result2[4] - 0.255125) < 0.000001);
+    assert(std::fabs(result2[5] - 0.143508) < 0.000001);
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 2 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    const std::size_t   item_cnt2 = 256;
+    MyDataFrame         df2;
+
+    df2.load_index(MyDataFrame::gen_sequence_index(0, item_cnt2, 1));
+
+    StlVecType<ary_col_t>   md_ary_col1  {
+        // Regime A: bottom-left (~[-2,-2])
+        {-2.1, -1.8}, {-1.9, -2.0}, {-2.3, -1.7}, {-1.8, -2.1}, {-2.0, -1.9},
+        {-2.2, -2.0}, {-1.7, -1.8}, {-2.1, -2.2}, {-1.9, -1.7}, {-2.0, -2.0},
+        {-2.1, -1.9}, {-1.8, -2.1}, {-2.3, -1.8}, {-2.0, -2.2}, {-1.9, -1.9},
+        {-2.2, -1.7}, {-2.0, -2.0}, {-1.8, -1.9}, {-2.1, -2.1}, {-2.0, -1.8},
+        {-1.9, -2.0}, {-2.1, -1.8}, {-2.0, -2.1}, {-1.8, -1.9}, {-2.2, -2.0},
+        {-2.0, -1.8}, {-1.9, -2.2}, {-2.1, -1.9}, {-2.0, -2.0}, {-1.8, -2.1},
+        {-2.2, -1.7}, {-2.0, -2.3}, {-1.9, -1.8}, {-2.1, -2.0}, {-2.0, -1.9},
+        {-2.0, -2.1}, {-1.9, -1.8}, {-2.1, -2.0}, {-2.0, -1.9}, {-1.8, -2.2},
+        {-2.2, -2.0}, {-2.0, -1.7}, {-1.9, -2.1}, {-2.1, -1.9}, {-2.0, -2.0},
+        {-1.8, -1.9}, {-2.1, -2.1}, {-2.0, -2.0}, {-2.2, -1.8}, {-1.9, -2.0},
+        {-2.1, -2.0}, {-2.0, -1.9}, {-1.9, -2.1}, {-2.2, -2.0}, {-1.8, -1.9},
+        {-2.0, -2.1}, {-2.1, -1.8}, {-1.9, -2.0}, {-2.0, -2.2}, {-2.2, -1.9},
+        {-1.8, -2.0}, {-2.1, -2.1}, {-2.0, -1.8}, {-1.9, -1.9}, {-2.1, -2.0},
+        {-2.0, -2.0}, {-1.8, -2.1}, {-2.2, -1.9}, {-2.0, -2.0}, {-1.9, -1.8},
+        {-2.0, -1.9}, {-2.1, -2.1}, {-1.9, -2.0}, {-2.0, -1.8}, {-1.8, -2.1},
+        {-2.2, -2.0}, {-2.0, -2.1}, {-1.9, -1.9}, {-2.1, -2.0}, {-2.0, -2.2},
+
+        // Transition A→C
+        {-0.2, 0.1}, {-0.1, -0.2}, {0.1, 0.0}, {-0.2, 0.2}, {0.0, -0.1},
+
+        // Regime C: center (~[0,0])
+        {0.0, 0.1}, {0.1, -0.1}, {-0.1, 0.2}, {0.2, 0.0}, {-0.1, -0.2},
+        {0.1, 0.2}, {-0.2, -0.1}, {0.0, 0.1}, {0.2, -0.1}, {-0.1, 0.0},
+        {0.0, 0.0}, {0.2, 0.1}, {-0.1, 0.2}, {0.1, -0.2}, { 0.0, 0.1},
+        {-0.1, 0.1}, {0.2, 0.0}, {0.0, -0.2}, {-0.1, 0.1}, {0.1, 0.2},
+        {0.0, 0.1}, {-0.1, -0.2}, {0.2, 0.0}, {0.1, 0.1}, {-0.2, 0.2},
+        {0.1, -0.1}, {0.0, 0.2}, {-0.2, 0.0}, {0.1, 0.1}, {-0.1, -0.2},
+        {-0.2, 0.1}, {0.0, -0.1}, {0.1, 0.2}, {-0.1, 0.0}, {0.2, -0.1},
+
+        // Transition C→B
+        {0.1, 0.2}, {0.2, 0.1}, {0.3, 0.3}, {0.5, 0.5}, {1.0,  1.0},
+
+        // Regime B: top-right (~[2,2])
+        {2.1, 1.9}, {1.9, 2.1}, {2.0, 2.0}, {2.2, 1.8}, {1.8, 2.2},
+        {2.0, 2.1}, {2.1, 1.8}, {1.9, 2.0}, {2.2, 2.1}, {2.0, 1.9},
+        {2.1, 2.0}, {1.8, 2.1}, {2.0, 2.2}, {1.9, 1.9}, {2.2, 2.0},
+        {2.0, 1.8}, {2.1, 2.1}, {1.9, 2.0}, {2.0, 2.2}, {1.8, 1.9},
+        {2.0, 2.0}, {2.2, 1.9}, {1.9, 2.1}, {2.1, 2.0}, {2.0, 1.8},
+        {1.8, 2.0}, {2.1, 2.2}, {2.0, 1.9}, {1.9, 2.1}, {2.2, 2.0},
+        {2.0, 2.1}, {1.9, 1.8}, {2.1, 2.0}, {2.0, 2.2}, {1.8, 2.1},
+        {2.0, 2.0}, {2.2, 2.1}, {1.9, 1.8}, {2.1, 2.2}, {2.0, 1.9},
+        {1.8, 2.1}, {2.2, 2.0}, {2.0, 1.9}, {2.1, 2.1}, {1.9, 2.0},
+        {2.0, 2.1}, {1.9, 2.0}, {2.1, 1.9}, {2.0, 2.2}, {1.8, 2.0},
+        {2.1, 2.0}, {2.0, 1.9}, {1.8, 2.1}, {2.2, 2.0}, {1.9, 2.2},
+        {2.0, 2.0}, {2.1, 2.2}, {1.9, 1.9}, {2.0, 2.1}, {1.8, 2.0},
+        {2.2, 2.1}, {2.0, 1.8}, {1.9, 2.0}, {2.1, 1.9}, {2.0, 2.1},
+        {1.8, 2.2}, {2.1, 1.9}, {2.0, 2.1}, {1.9, 2.0}, {2.2, 1.8},
+        {2.0, 2.0}, {2.1, 2.1}, {1.9, 2.0}, {2.2, 1.9}, {1.8, 2.1},
+        {2.0, 1.9}, {2.1, 2.0}, {1.9, 2.2}, {2.0, 2.1}, {1.8, 1.9},
+
+        // Transition B→A (loop back)
+        {1.0, 1.0}, {0.5, 0.5}, {0.0, 0.0}, {-0.5, -0.5}, {-1.0, -1.0}
+    };
+
+    StlVecType<vec_col_t>   md_vec_col1  {
+        // Regime A: bottom-left (~[-2,-2])
+        {-2.1, -1.8}, {-1.9, -2.0}, {-2.3, -1.7}, {-1.8, -2.1}, {-2.0, -1.9},
+        {-2.2, -2.0}, {-1.7, -1.8}, {-2.1, -2.2}, {-1.9, -1.7}, {-2.0, -2.0},
+        {-2.1, -1.9}, {-1.8, -2.1}, {-2.3, -1.8}, {-2.0, -2.2}, {-1.9, -1.9},
+        {-2.2, -1.7}, {-2.0, -2.0}, {-1.8, -1.9}, {-2.1, -2.1}, {-2.0, -1.8},
+        {-1.9, -2.0}, {-2.1, -1.8}, {-2.0, -2.1}, {-1.8, -1.9}, {-2.2, -2.0},
+        {-2.0, -1.8}, {-1.9, -2.2}, {-2.1, -1.9}, {-2.0, -2.0}, {-1.8, -2.1},
+        {-2.2, -1.7}, {-2.0, -2.3}, {-1.9, -1.8}, {-2.1, -2.0}, {-2.0, -1.9},
+        {-2.0, -2.1}, {-1.9, -1.8}, {-2.1, -2.0}, {-2.0, -1.9}, {-1.8, -2.2},
+        {-2.2, -2.0}, {-2.0, -1.7}, {-1.9, -2.1}, {-2.1, -1.9}, {-2.0, -2.0},
+        {-1.8, -1.9}, {-2.1, -2.1}, {-2.0, -2.0}, {-2.2, -1.8}, {-1.9, -2.0},
+        {-2.1, -2.0}, {-2.0, -1.9}, {-1.9, -2.1}, {-2.2, -2.0}, {-1.8, -1.9},
+        {-2.0, -2.1}, {-2.1, -1.8}, {-1.9, -2.0}, {-2.0, -2.2}, {-2.2, -1.9},
+        {-1.8, -2.0}, {-2.1, -2.1}, {-2.0, -1.8}, {-1.9, -1.9}, {-2.1, -2.0},
+        {-2.0, -2.0}, {-1.8, -2.1}, {-2.2, -1.9}, {-2.0, -2.0}, {-1.9, -1.8},
+        {-2.0, -1.9}, {-2.1, -2.1}, {-1.9, -2.0}, {-2.0, -1.8}, {-1.8, -2.1},
+        {-2.2, -2.0}, {-2.0, -2.1}, {-1.9, -1.9}, {-2.1, -2.0}, {-2.0, -2.2},
+
+        // Transition A→C
+        {-0.2, 0.1}, {-0.1, -0.2}, {0.1, 0.0}, {-0.2, 0.2}, {0.0, -0.1},
+
+        // Regime C: center (~[0,0])
+        {0.0, 0.1}, {0.1, -0.1}, {-0.1, 0.2}, {0.2, 0.0}, {-0.1, -0.2},
+        {0.1, 0.2}, {-0.2, -0.1}, {0.0, 0.1}, {0.2, -0.1}, {-0.1, 0.0},
+        {0.0, 0.0}, {0.2, 0.1}, {-0.1, 0.2}, {0.1, -0.2}, { 0.0, 0.1},
+        {-0.1, 0.1}, {0.2, 0.0}, {0.0, -0.2}, {-0.1, 0.1}, {0.1, 0.2},
+        {0.0, 0.1}, {-0.1, -0.2}, {0.2, 0.0}, {0.1, 0.1}, {-0.2, 0.2},
+        {0.1, -0.1}, {0.0, 0.2}, {-0.2, 0.0}, {0.1, 0.1}, {-0.1, -0.2},
+        {-0.2, 0.1}, {0.0, -0.1}, {0.1, 0.2}, {-0.1, 0.0}, {0.2, -0.1},
+
+        // Transition C→B
+        {0.1, 0.2}, {0.2, 0.1}, {0.3, 0.3}, {0.5, 0.5}, {1.0,  1.0},
+
+        // Regime B: top-right (~[2,2])
+        {2.1, 1.9}, {1.9, 2.1}, {2.0, 2.0}, {2.2, 1.8}, {1.8, 2.2},
+        {2.0, 2.1}, {2.1, 1.8}, {1.9, 2.0}, {2.2, 2.1}, {2.0, 1.9},
+        {2.1, 2.0}, {1.8, 2.1}, {2.0, 2.2}, {1.9, 1.9}, {2.2, 2.0},
+        {2.0, 1.8}, {2.1, 2.1}, {1.9, 2.0}, {2.0, 2.2}, {1.8, 1.9},
+        {2.0, 2.0}, {2.2, 1.9}, {1.9, 2.1}, {2.1, 2.0}, {2.0, 1.8},
+        {1.8, 2.0}, {2.1, 2.2}, {2.0, 1.9}, {1.9, 2.1}, {2.2, 2.0},
+        {2.0, 2.1}, {1.9, 1.8}, {2.1, 2.0}, {2.0, 2.2}, {1.8, 2.1},
+        {2.0, 2.0}, {2.2, 2.1}, {1.9, 1.8}, {2.1, 2.2}, {2.0, 1.9},
+        {1.8, 2.1}, {2.2, 2.0}, {2.0, 1.9}, {2.1, 2.1}, {1.9, 2.0},
+        {2.0, 2.1}, {1.9, 2.0}, {2.1, 1.9}, {2.0, 2.2}, {1.8, 2.0},
+        {2.1, 2.0}, {2.0, 1.9}, {1.8, 2.1}, {2.2, 2.0}, {1.9, 2.2},
+        {2.0, 2.0}, {2.1, 2.2}, {1.9, 1.9}, {2.0, 2.1}, {1.8, 2.0},
+        {2.2, 2.1}, {2.0, 1.8}, {1.9, 2.0}, {2.1, 1.9}, {2.0, 2.1},
+        {1.8, 2.2}, {2.1, 1.9}, {2.0, 2.1}, {1.9, 2.0}, {2.2, 1.8},
+        {2.0, 2.0}, {2.1, 2.1}, {1.9, 2.0}, {2.2, 1.9}, {1.8, 2.1},
+        {2.0, 1.9}, {2.1, 2.0}, {1.9, 2.2}, {2.0, 2.1}, {1.8, 1.9},
+
+        // Transition B→A (loop back)
+        {1.0, 1.0}, {0.5, 0.5}, {0.0, 0.0}, {-0.5, -0.5}, {-1.0, -1.0}
+    };
+
+    df2.load_column<ary_col_t>("ARY COL 1", std::move(md_ary_col1),
+                               nan_policy::dont_pad_with_nans);
+
+    df2.load_column<vec_col_t>("VEC COL 1", std::move(md_vec_col1),
+                               nan_policy::dont_pad_with_nans);
+
+    const auto  ary_res =
+        df2.MC_station_dist<ary_col_t>({ "ARY COL 1" }, true);
+    const auto  vec_res =
+        df2.MC_station_dist<vec_col_t>({ "VEC COL 1" }, true);
+
+    assert(ary_res.size() == 16);
+    assert(vec_res.size() == 16);
+
+    assert(std::fabs(ary_res[0] - 0.196076) < 0.000001);
+    assert(std::fabs(ary_res[4] - 0.034722) < 0.000001);
+    assert(std::fabs(ary_res[11] - 0.034722) < 0.000001);
+    assert(std::fabs(ary_res[15] - 0.208413) < 0.000001);
+    assert(std::fabs(vec_res[0] - 0.196076) < 0.000001);
+    assert(std::fabs(vec_res[4] - 0.034722) < 0.000001);
+    assert(std::fabs(vec_res[11] - 0.034722) < 0.000001);
+    assert(std::fabs(vec_res[15] - 0.208413) < 0.000001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_SeasonalPeriodVisitor()  {
+
+    std::cout << "\nTesting SeasonalPeriodVisitor{ } ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("IcecreamProduction.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    ssp_v<double, DateTime> ssp({ .de_serial_corr = true});
+
+    df.single_act_visit<double>("IceCreamProduction", ssp);
+
+    assert(std::fabs(ssp.get_max_magnitude() - 4073.55) < 0.01);
+    assert(ssp.get_dominant_index() == 53);
+    assert(std::fabs(ssp.get_dominant_frequency() - 0.08346) < 0.00001);
+    assert(std::fabs(ssp.get_period() - 11.9811) < 0.0001);
+    assert(ssp.get_period() == ssp.get_result());
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    constexpr std::size_t   n { 120 };
+    constexpr double        two_pi { 2.0 * M_PI };
+    constexpr double        period_0 { 12.0 };
+    constexpr double        period_1 {  6.0 };
+    constexpr double        period_2 {  4.0 };
+
+    // Build index and data vectors
+    //
+    StlVecType<vec_col_t>   vec_col(n, vec_col_t(dim));
+    StlVecType<ary_col_t>   ary_col(n, ary_col_t());
+
+    for (std::size_t t { 0 }; t < n; ++t)  {
+        vec_col[t][0] = std::sin(two_pi * double(t) / period_0);
+        vec_col[t][1] = std::sin(two_pi * double(t) / period_1);
+        vec_col[t][2] = std::sin(two_pi * double(t) / period_2);
+
+        ary_col[t][0] = vec_col[t][0];
+        ary_col[t][1] = vec_col[t][1];
+        ary_col[t][2] = vec_col[t][2];
+    }
+
+    df.load_column<vec_col_t>("VEC MD COL", std::move(vec_col),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("ARY MD COL", std::move(ary_col),
+                              nan_policy::dont_pad_with_nans);
+
+    // No detrending or de-serial-correlation needed for pure sine waves.
+    // sampling_rate = 1 (one sample per time unit).
+    //
+    SeasonalityParams<double>   params;
+
+    params.detrend = false;
+    params.de_serial_corr = false;
+    params.sampling_rate = 1;
+
+    SeasonalPeriodVisitor<vec_col_t>    vec_sp_v { params };
+    SeasonalPeriodVisitor<ary_col_t>    ary_sp_v { params };
+
+    df.single_act_visit<vec_col_t>("VEC MD COL", vec_sp_v);
+    df.single_act_visit<ary_col_t>("ARY MD COL", ary_sp_v);
+
+    assert(vec_sp_v.get_md_result().size() == dim);
+    assert(std::abs(vec_sp_v.get_md_result()[0] - 12.0) < 1e-9);
+    assert(std::abs(vec_sp_v.get_md_result()[1] - 6.0) < 1e-9);
+    assert(std::abs(vec_sp_v.get_md_result()[2] - 4.0) < 1e-9);
+    assert(ary_sp_v.get_md_result().size() == dim);
+    assert(std::abs(ary_sp_v.get_md_result()[0] - 12.0) < 1e-9);
+    assert(std::abs(ary_sp_v.get_md_result()[1] - 6.0) < 1e-9);
+    assert(std::abs(ary_sp_v.get_md_result()[2] - 4.0) < 1e-9);
+
+    assert(vec_sp_v.get_md_max_magnitude().size() == dim);
+    assert(std::abs(vec_sp_v.get_md_max_magnitude()[0] - 60.0) < 1e-9);
+    assert(std::abs(vec_sp_v.get_md_max_magnitude()[1] - 60.0) < 1e-9);
+    assert(std::abs(vec_sp_v.get_md_max_magnitude()[2] - 60.0) < 1e-9);
+    assert(ary_sp_v.get_md_max_magnitude().size() == dim);
+    assert(std::abs(ary_sp_v.get_md_max_magnitude()[0] - 60.0) < 1e-9);
+    assert(std::abs(ary_sp_v.get_md_max_magnitude()[1] - 60.0) < 1e-9);
+    assert(std::abs(ary_sp_v.get_md_max_magnitude()[2] - 60.0) < 1e-9);
+
+    assert(vec_sp_v.get_md_dominant_frequency().size() == dim);
+    assert(std::abs(vec_sp_v.get_md_dominant_frequency()[0] - 0.08333) < 1e-5);
+    assert(std::abs(vec_sp_v.get_md_dominant_frequency()[1] - 0.16667) < 1e-5);
+    assert(std::abs(vec_sp_v.get_md_dominant_frequency()[2] - 0.25) < 1e-9);
+    assert(ary_sp_v.get_md_dominant_frequency().size() == dim);
+    assert(std::abs(ary_sp_v.get_md_dominant_frequency()[0] - 0.08333) < 1e-5);
+    assert(std::abs(ary_sp_v.get_md_dominant_frequency()[1] - 0.16667) < 1e-5);
+    assert(std::abs(ary_sp_v.get_md_dominant_frequency()[2] - 0.25) < 1e-9);
+
+    assert(vec_sp_v.get_md_dominant_index().size() == dim);
+    assert(vec_sp_v.get_md_dominant_index()[0] == 10);
+    assert(vec_sp_v.get_md_dominant_index()[1] == 20);
+    assert(vec_sp_v.get_md_dominant_index()[2] == 30);
+    assert(ary_sp_v.get_md_dominant_index().size() == dim);
+    assert(ary_sp_v.get_md_dominant_index()[0] == 10);
+    assert(ary_sp_v.get_md_dominant_index()[1] == 20);
+    assert(ary_sp_v.get_md_dominant_index()[2] == 30);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_read_data_file_with_schema()  {
+
+    std::cout << "\nTesting test_read_data_file_with_schema{ } ..."
+              << std::endl;
+
+    MyDataFrame             df1;
+    MyDataFrame             df2;
+    ReadParams::SchemaVec   schema {  // First is the index column
+        { .col_type = file_dtypes::ULONG, .num_rows = 12, .col_idx = 0 },
+        { "Open", file_dtypes::DOUBLE, 12, 1 },
+        { "High", file_dtypes::DOUBLE, 12, 2 },
+        { "Low", file_dtypes::DOUBLE, 12, 3 },
+        { "Close", file_dtypes::DOUBLE, 12, 4 },
+        { "Adj_Close", file_dtypes::DOUBLE, 12, 5 },
+        { "Volume", file_dtypes::LONG, 12, 6 },
+    };
+
+    try  {
+        df1.read("SchemaWithHeader.csv", io_format::csv2, { .schema = schema });
+        df2.read("SchemaWithoutHeader.csv", io_format::csv2,
+                 { .skip_first_line = false, .schema = schema });
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    assert(df1.get_index().size() == 12);
+    assert(df1.get_index()[0] == 1);
+    assert(df1.get_index()[6] == 7);
+    assert(df1.get_index()[11] == 12);
+    assert(df1.get_column<double>("Close").size() == 12);
+    assert((std::fabs(df1.get_column<double>("Close")[0] - 185.53) < 0.01));
+    assert((std::fabs(df1.get_column<double>("Close")[6] - 187.26) < 0.01));
+    assert((std::fabs(df1.get_column<double>("Close")[11] - 190.09) < 0.01));
+    assert(df1.get_column<long>("Volume").size() == 12);
+    assert(df1.get_column<long>("Volume")[0] == 4546500);
+    assert(df1.get_column<long>("Volume")[6] == 4022400);
+    assert(df1.get_column<long>("Volume")[11] == 7644600);
+
+    assert(df2.get_index().size() == 12);
+    assert(df2.get_index()[0] == 1);
+    assert(df2.get_index()[6] == 7);
+    assert(df2.get_index()[11] == 12);
+    assert(df2.get_column<double>("Close").size() == 12);
+    assert((std::fabs(df2.get_column<double>("Close")[0] - 185.53) < 0.01));
+    assert((std::fabs(df2.get_column<double>("Close")[6] - 187.26) < 0.01));
+    assert((std::fabs(df2.get_column<double>("Close")[11] - 190.09) < 0.01));
+    assert(df2.get_column<long>("Volume").size() == 12);
+    assert(df2.get_column<long>("Volume")[0] == 4546500);
+    assert(df2.get_column<long>("Volume")[6] == 4022400);
+    assert(df2.get_column<long>("Volume")[11] == 7644600);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_knn()  {
+
+    std::cout << "\nTesting knn( ) ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  result =
+        df.knn<double>({ "IBM_Open", "IBM_High", "IBM_Low", "IBM_Close" },
+                       { 78.95, 80.48, 78.35, 80.48 }, 4);
+
+    assert(result.size() == 4);
+
+    assert(result[0].second == 500);  // Index into the IBM data columns
+    assert(result[0].first.size() == 4);
+    assert((std::fabs(result[0].first[0] - 78.9) < 0.01));
+    assert((std::fabs(result[0].first[2] - 78.32) < 0.01));
+    assert((std::fabs(result[0].first[3] - 80.4) < 0.01));
+
+    assert(result[1].second == 541);  // Index into the IBM data columns
+    assert(result[1].first.size() == 4);
+    assert((std::fabs(result[1].first[0] - 78.8) < 0.01));
+    assert((std::fabs(result[1].first[2] - 78.19) < 0.01));
+    assert((std::fabs(result[1].first[3] - 80.57) < 0.01));
+
+    assert(result[2].second == 558);  // Index into the IBM data columns
+    assert(result[2].first.size() == 4);
+    assert((std::fabs(result[2].first[0] - 78.5) < 0.01));
+    assert((std::fabs(result[2].first[2] - 78.36) < 0.01));
+    assert((std::fabs(result[2].first[3] - 80.11) < 0.01));
+
+    assert(result[3].second == 1232);  // Index into the IBM data columns
+    assert(result[3].first.size() == 4);
+    assert((std::fabs(result[3].first[0] - 79.25) < 0.01));
+    assert((std::fabs(result[3].first[2] - 78.87) < 0.01));
+    assert((std::fabs(result[3].first[3] - 80.36) < 0.01));
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<ary_col_t>  md_ary_col1  {
+        { 0.1, 0.2, 0.3 }, { 0.4, 0.5, 0.6 }, { 0.0, 0.1, 0.0 },
+        { 0.7, 0.8, 0.9 }, { 3.0, 3.1, 3.2 }, { 3.3, 3.4, 3.5 },
+        { 3.6, 3.7, 3.8 }, { 8.0, 8.1, 8.2 }, { 8.3, 8.4, 8.5 },
+        { 8.6, 8.7, 8.8 },
+    };
+    std::vector<ary_col_t>  md_ary_col2  {
+        { 1.0, 1.1, 1.2 }, { 1.3, 1.4, 1.5 }, { 1.6, 1.7, 1.8 },
+        { 1.9, 2.0, 2.1 }, { 6.0, 6.1, 6.2 }, { 6.3, 6.4, 6.5 },
+        { 6.6, 6.7, 6.8 }, { 3.0, 3.1, 3.2 }, { 3.3, 3.4, 3.5 },
+        { 3.6, 3.7, 3.8 },
+    };
+    std::vector<ary_col_t>  md_ary_col3  {
+        { 5.0, 5.1, 5.0 }, { 5.2, 5.3, 5.1 }, { 5.4, 5.5, 5.3 },
+        { 4.8, 4.9, 5.0 }, { 2.0, 2.1, 2.2 }, { 2.3, 2.4, 2.5 },
+        { 2.6, 2.7, 2.8 }, { 7.0, 7.1, 7.2 }, { 7.3, 7.4, 7.5 },
+        { 7.6, 7.7, 7.8 },
+    };
+    std::vector<ary_col_t>  md_ary_col4  {
+        { 9.0, 9.1, 9.2 }, { 9.3, 9.4, 9.5 }, { 9.6, 9.7, 9.8 },
+        { 8.7, 8.8, 8.9 }, { 7.0, 7.1, 7.2 }, { 7.3, 7.4, 7.5 },
+        { 7.6, 7.7, 7.8 }, { 1.0, 1.1, 1.2 }, { 1.3, 1.4, 1.5 },
+        { 1.6, 1.7, 1.8 },
+    };
+
+    std::vector<vec_col_t>  md_vec_col1  {
+        { 0.1, 0.2, 0.3 }, { 0.4, 0.5, 0.6 }, { 0.0, 0.1, 0.0 },
+        { 0.7, 0.8, 0.9 }, { 3.0, 3.1, 3.2 }, { 3.3, 3.4, 3.5 },
+        { 3.6, 3.7, 3.8 }, { 8.0, 8.1, 8.2 }, { 8.3, 8.4, 8.5 },
+        { 8.6, 8.7, 8.8 },
+    };
+    std::vector<vec_col_t>  md_vec_col2  {
+        { 1.0, 1.1, 1.2 }, { 1.3, 1.4, 1.5 }, { 1.6, 1.7, 1.8 },
+        { 1.9, 2.0, 2.1 }, { 6.0, 6.1, 6.2 }, { 6.3, 6.4, 6.5 },
+        { 6.6, 6.7, 6.8 }, { 3.0, 3.1, 3.2 }, { 3.3, 3.4, 3.5 },
+        { 3.6, 3.7, 3.8 },
+    };
+    std::vector<vec_col_t>  md_vec_col3  {
+        { 5.0, 5.1, 5.0 }, { 5.2, 5.3, 5.1 }, { 5.4, 5.5, 5.3 },
+        { 4.8, 4.9, 5.0 }, { 2.0, 2.1, 2.2 }, { 2.3, 2.4, 2.5 },
+        { 2.6, 2.7, 2.8 }, { 7.0, 7.1, 7.2 }, { 7.3, 7.4, 7.5 },
+        { 7.6, 7.7, 7.8 },
+    };
+    std::vector<vec_col_t>  md_vec_col4  {
+        { 9.0, 9.1, 9.2 }, { 9.3, 9.4, 9.5 }, { 9.6, 9.7, 9.8 },
+        { 8.7, 8.8, 8.9 }, { 7.0, 7.1, 7.2 }, { 7.3, 7.4, 7.5 },
+        { 7.6, 7.7, 7.8 }, { 1.0, 1.1, 1.2 }, { 1.3, 1.4, 1.5 },
+        { 1.6, 1.7, 1.8 },
+    };
+
+    df.load_column<ary_col_t>("AryCol1", std::move(md_ary_col1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("AryCol2", std::move(md_ary_col2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("AryCol3", std::move(md_ary_col3),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("AryCol4", std::move(md_ary_col4),
+                              nan_policy::dont_pad_with_nans);
+
+    df.load_column<vec_col_t>("VecCol1", std::move(md_vec_col1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VecCol2", std::move(md_vec_col2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VecCol3", std::move(md_vec_col3),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VecCol4", std::move(md_vec_col4),
+                              nan_policy::dont_pad_with_nans);
+
+    std::vector<ary_col_t>  ary_target  {
+        { 0.2, 0.3, 0.4 },  // Close to col_1 of rows 0 – 2
+        { 1.1, 1.2, 1.3 },  // Close to col_2 of rows 0 – 1
+        { 5.1, 5.2, 5.1 },  // Close to col_3 of rows 0 – 1
+        { 9.1, 9.2, 9.3 },  // Close to col_4 of rows 0 – 1
+    };
+    std::vector<vec_col_t>  vec_target  {
+        { 0.2, 0.3, 0.4 },  // Close to col_1 of rows 0 – 2
+        { 1.1, 1.2, 1.3 },  // Close to col_2 of rows 0 – 1
+        { 5.1, 5.2, 5.1 },  // Close to col_3 of rows 0 – 1
+        { 9.1, 9.2, 9.3 },  // Close to col_4 of rows 0 – 1
+    };
+    const auto              ary_res =
+        df.knn<ary_col_t>({ "AryCol1", "AryCol2", "AryCol3", "AryCol4" },
+                          ary_target, 4);
+    const auto              vec_res =
+        df.knn<vec_col_t>({ "VecCol1", "VecCol2", "VecCol3", "VecCol4" },
+                          vec_target, 4);
+
+    assert(ary_res.size() == 4);
+    assert(ary_res[0].second == 0);  // Index into the Ary... columns
+    assert(ary_res[1].second == 1);  // Index into the Ary... columns
+    assert(ary_res[2].second == 2);  // Index into the Ary... columns
+    assert(ary_res[3].second == 3);  // Index into the Ary... columns
+
+    assert(vec_res.size() == 4);
+    assert(vec_res[0].second == 0);  // Index into the Vec... columns
+    assert(vec_res[1].second == 1);  // Index into the Vec... columns
+    assert(vec_res[2].second == 2);  // Index into the Vec... columns
+    assert(vec_res[3].second == 3);  // Index into the Vec... columns
+
+    assert(ary_res[0].first.size() == 4);
+    assert((std::fabs(ary_res[0].first[0][0] - 0.1) < 0.01));
+    assert((std::fabs(ary_res[0].first[0][2] - 0.3) < 0.01));
+    assert((std::fabs(ary_res[1].first[1][1] - 1.4) < 0.01));
+    assert((std::fabs(ary_res[1].first[3][2] - 9.5) < 0.01));
+    assert((std::fabs(ary_res[2].first[2][0] - 5.4) < 0.01));
+    assert((std::fabs(ary_res[2].first[2][2] - 5.3) < 0.01));
+    assert((std::fabs(ary_res[3].first[1][2] - 2.1) < 0.01));
+    assert((std::fabs(ary_res[3].first[3][1] - 8.8) < 0.01));
+
+    assert(vec_res[0].first.size() == 4);
+    assert((std::fabs(vec_res[0].first[0][0] - 0.1) < 0.01));
+    assert((std::fabs(vec_res[0].first[0][2] - 0.3) < 0.01));
+    assert((std::fabs(vec_res[1].first[1][1] - 1.4) < 0.01));
+    assert((std::fabs(vec_res[1].first[3][2] - 9.5) < 0.01));
+    assert((std::fabs(vec_res[2].first[2][0] - 5.4) < 0.01));
+    assert((std::fabs(vec_res[2].first[2][2] - 5.3) < 0.01));
+    assert((std::fabs(vec_res[3].first[1][2] - 2.1) < 0.01));
+    assert((std::fabs(vec_res[3].first[3][1] - 8.8) < 0.01));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_DynamicTimeWarpVisitor()  {
+
+    std::cout << "\nTesting DynamicTimeWarpVisitor{ } ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    dtw_v<double, std::string>  dtw;
+
+    df.single_act_visit<double, double>("IBM_Close", "IBM_Close", dtw);
+    assert((std::fabs(dtw.get_result() - 0.0) < 1e-15));
+
+    df.single_act_visit<double, double>("IBM_Open", "IBM_Close", dtw);
+    assert((std::fabs(dtw.get_result() - 2682.91) < 0.01));
+
+    df.single_act_visit<double, double>("IBM_High", "IBM_Low", dtw);
+    assert((std::fabs(dtw.get_result() - 6255.33) < 0.01));
+
+    df.single_act_visit<double, double>("IBM_Open", "IBM_Low", dtw);
+    assert((std::fabs(dtw.get_result() - 3649.94) < 0.01));
+
+    df.single_act_visit<double, double>("IBM_Close", "IBM_Low", dtw);
+    assert((std::fabs(dtw.get_result() - 3851.43) < 0.01));
+
+    df.single_act_visit<double, double>("IBM_Open", "IBM_High", dtw);
+    assert((std::fabs(dtw.get_result() - 3833.26) < 0.01));
+
+    df.single_act_visit<double, double>("IBM_Close", "IBM_High", dtw);
+    assert((std::fabs(dtw.get_result() - 3737.44) < 0.01));
+
+    DynamicTimeWarpVisitor<double, std::string> dtw2 (
+        normalization_type::z_score);
+
+    df.single_act_visit<double, double>("IBM_Close", "IBM_Close", dtw2);
+    assert((std::fabs(dtw2.get_result() - 0.0) < 1e-15));
+
+    df.single_act_visit<double, double>("IBM_Open", "IBM_Close", dtw2);
+    assert((std::fabs(dtw2.get_result() - 70.4392) < 0.0001));
+
+    df.single_act_visit<double, double>("IBM_High", "IBM_Low", dtw2);
+    assert((std::fabs(dtw2.get_result() - 90.0254) < 0.0001));
+
+    df.single_act_visit<double, double>("IBM_Open", "IBM_Low", dtw2);
+    assert((std::fabs(dtw2.get_result() - 77.116) < 0.0001));
+
+    df.single_act_visit<double, double>("IBM_Close", "IBM_Low", dtw2);
+    assert((std::fabs(dtw2.get_result() - 76.7581) < 0.0001));
+
+    df.single_act_visit<double, double>("IBM_Open", "IBM_High", dtw2);
+    assert((std::fabs(dtw2.get_result() - 77.2208) < 0.0001));
+
+    df.single_act_visit<double, double>("IBM_Close", "IBM_High", dtw2);
+    assert((std::fabs(dtw2.get_result() - 77.2344) < 0.0001));
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<vec_col_t>  x_vec  {
+        { 1.0, 0.0, 0.0 }, { 2.0, 1.0, 0.5 }, { 3.0, 2.0, 1.0 },
+        { 4.0, 3.0, 1.5 }, { 5.0, 4.0, 2.0 },
+    };
+    std::vector<ary_col_t>  x_ary  {
+        { 1.0, 0.0, 0.0 }, { 2.0, 1.0, 0.5 }, { 3.0, 2.0, 1.0 },
+        { 4.0, 3.0, 1.5 }, { 5.0, 4.0, 2.0 },
+    };
+    std::vector<vec_col_t>  y_vec  {
+        { 1.1, 0.1, 0.1 }, { 1.9, 0.9, 0.4 }, { 2.8, 1.8, 0.9 },
+        { 3.5, 2.8, 1.4 }, { 4.2, 3.5, 1.7 }, { 5.1, 4.1, 2.1 },
+    };
+    std::vector<ary_col_t>  y_ary  {
+        { 1.1, 0.1, 0.1 }, { 1.9, 0.9, 0.4 }, { 2.8, 1.8, 0.9 },
+        { 3.5, 2.8, 1.4 }, { 4.2, 3.5, 1.7 }, { 5.1, 4.1, 2.1 },
+    };
+    std::vector<vec_col_t>  z_vec  {
+        { 10.0, 20.0, 30.0 }, { 11.0, 21.0, 31.0 }, { 12.0, 22.0, 32.0 },
+        { 13.0, 23.0, 33.0 }, { 14.0, 24.0, 34.0 },
+    };
+    std::vector<ary_col_t>  z_ary  {
+        { 10.0, 20.0, 30.0 }, { 11.0, 21.0, 31.0 }, { 12.0, 22.0, 32.0 },
+        { 13.0, 23.0, 33.0 }, { 14.0, 24.0, 34.0 },
+    };
+
+    df.load_column<vec_col_t>("X COL VEC", std::move(x_vec),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("X COL ARY", std::move(x_ary),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("Y COL VEC", std::move(y_vec),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("Y COL ARY", std::move(y_ary),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("Z COL VEC", std::move(z_vec),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("Z COL ARY", std::move(z_ary),
+                              nan_policy::dont_pad_with_nans);
+
+    DynamicTimeWarpVisitor<vec_col_t, std::string>  vec_dtw {
+        normalization_type::z_score
+    };
+    DynamicTimeWarpVisitor<ary_col_t, std::string>  ary_dtw {
+        normalization_type::z_score
+    };
+
+    df.single_act_visit<vec_col_t, vec_col_t>
+        ("X COL VEC", "Y COL VEC", vec_dtw);
+    df.single_act_visit<ary_col_t, ary_col_t>
+        ("X COL ARY", "Y COL ARY", ary_dtw);
+    assert(std::abs(vec_dtw.get_result() - 1.91304) < 0.00001);
+    assert(std::abs(ary_dtw.get_result() - 1.91304) < 0.00001);
+
+    // Z-score normalization makes DTW shape-sensitive but
+    // magnitude/offset blind. Two sequences that differ only by a linear
+    // scaling or offset will have DTW = 0 after z-score. This is a feature
+    // when comparing signals of different amplitudes (e.g. sensor readings
+    // in different units), but a trap if you expect sequences in different
+    // regions of space to be far apart.
+    //
+    df.single_act_visit<ary_col_t, ary_col_t>
+        ("X COL ARY", "Z COL ARY", ary_dtw);
+    assert(std::abs(ary_dtw.get_result() - 0.0) < 1e-12);
+
+    DynamicTimeWarpVisitor<ary_col_t, std::string>  ary_dtw_nn {
+        normalization_type::none
+    };
+
+    df.single_act_visit<ary_col_t, ary_col_t>
+        ("X COL ARY", "Z COL ARY", ary_dtw_nn);
+    assert(std::abs(ary_dtw_nn.get_result() - 189.879) < 0.001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_AnomalyDetectByFFTVisitor()  {
+
+    std::cout << "\nTesting AnomalyDetectByFFTVisitor{ } ..." << std::endl;
+
+    constexpr std::size_t   item_cnt = 1024;
+    MyStdDataFrame          df;
+
+    df.load_index(MyStdDataFrame::gen_sequence_index(0, item_cnt, 1));
+
+    std::vector<double>   sine_col;
+
+    sine_col.reserve(item_cnt);
+    for (std::size_t i = 0; i < item_cnt; ++i)  {
+        sine_col.push_back(std::sin(2.0 * M_PI * i / 20.0)); // Base sine wave
+        if (i % 30 == 0)  sine_col.back() += 2.0;  // Inject anomalies
+    }
+    df.load_column("sine col", std::move(sine_col));
+
+    // Keep at least 10% of the frequencies as dominant frequencies.
+    //
+    and_fft_v<double>               anomaly1(100, 1.0);
+    const std::vector<std::size_t>  result1 =
+        { 0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360, 390, 420,
+          450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840,
+          870, 900, 930, 960, 990, 1020 };
+
+    df.single_act_visit<double>("sine col", anomaly1);
+    assert((anomaly1.get_result() == result1));
+
+    and_fft_v<double>   anomaly2(10, 1.5);
+
+    df.single_act_visit<double>("sine col", anomaly2);
+    assert((anomaly2.get_result() == result1));
+
+    and_fft_v<double>   anomaly3(100, 1.0, normalization_type::z_score);
+
+    df.single_act_visit<double>("sine col", anomaly3);
+    assert((anomaly3.get_result() == result1));
+
+    and_fft_v<double>   anomaly4(10, 1.5, normalization_type::z_score);
+
+    df.single_act_visit<double>("sine col", anomaly4);
+    assert((anomaly4.get_result() == result1));
+
+    // Now do the same thing for IBM market data
+    //
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+    ibm.get_column<double>("IBM_Close")[502] = 800.0;
+    ibm.get_column<double>("IBM_Close")[1001] = 900.0;
+    ibm.get_column<double>("IBM_Close")[2002] = 850.0;
+
+    // Keep at least 10% of the frequencies as dominant frequencies.
+    // In case of IBM market data, I had to keep more
+    //
+    and_fft_v<double, std::string>  anomaly5(1000, 80.0);
+    const std::vector<std::size_t>  result2 =
+        { 501, 502, 503, 1000, 1001, 1002, 2001, 2002, 2003 };
+
+    ibm.single_act_visit<double>("IBM_Close", anomaly5);
+    assert((anomaly5.get_result() == result2));
+
+    and_fft_v<double, std::string>  anomaly6(1000, 10.0,
+                                             normalization_type::z_score);
+    const std::vector<std::size_t>  result3 = { 502, 1001, 2002 };
+
+    ibm.single_act_visit<double>("IBM_Close", anomaly6);
+    assert((anomaly6.get_result() == result3));
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+    constexpr double        two_pi { 2.0 * M_PI };
+    constexpr std::size_t   col_s { 128 };      // power-of-2 - radix-2 FFT
+    constexpr std::size_t   freq_num { 8 };     // keep only 8 low frequencies
+    constexpr double        amplitude { 1.0 };  // sine amplitude per channel
+    constexpr double        spike_mag { 15.0 }; // anomaly magnitude
+    constexpr std::size_t   spike_idx { 64 };   // time step of the spike
+    constexpr double        threshold { 2.0 };  // anomaly_threshold
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<vec_col_t>  no_anomaly_vec(col_s, vec_col_t(dim));
+    std::vector<ary_col_t>  no_anomaly_ary(col_s);
+
+    for (std::size_t i { 0 }; i < col_s; ++i)  {
+        for (std::size_t d { 0 }; d < dim; ++d)  {
+            no_anomaly_vec[i][d] =
+                amplitude *
+                std::sin(two_pi * double(d + 1) * double(i) / double(col_s));
+            no_anomaly_ary[i][d] = no_anomaly_vec[i][d];
+        }
+    }
+    df.load_column<vec_col_t>("NO ANOMALY VEC", std::move(no_anomaly_vec),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("NO ANOMALY ARY", std::move(no_anomaly_ary),
+                              nan_policy::dont_pad_with_nans);
+
+    std::vector<vec_col_t>  spiked_vec =
+        df.get_column<vec_col_t>("NO ANOMALY VEC");
+    std::vector<ary_col_t>  spiked_ary =
+        df.get_column<ary_col_t>("NO ANOMALY ARY");
+
+    for (std::size_t d { 0 }; d < dim; ++d)  {
+        spiked_vec[spike_idx][d] += spike_mag;
+        spiked_ary[spike_idx][d] += spike_mag;
+    }
+    df.load_column<vec_col_t>("SPIKED VEC", std::move(spiked_vec),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("SPIKED ARY", std::move(spiked_ary),
+                              nan_policy::dont_pad_with_nans);
+
+    and_fft_v<vec_col_t, std::string>  fft_vec { freq_num, threshold };
+    and_fft_v<ary_col_t, std::string>  fft_ary { freq_num, threshold };
+
+    df.single_act_visit<vec_col_t>("NO ANOMALY VEC", fft_vec);
+    df.single_act_visit<ary_col_t>("NO ANOMALY ARY", fft_ary);
+    assert(fft_vec.get_result().empty());
+    assert(fft_ary.get_result().empty());
+
+    df.single_act_visit<vec_col_t>("SPIKED VEC", fft_vec);
+    df.single_act_visit<ary_col_t>("SPIKED ARY", fft_ary);
+    assert(fft_vec.get_result().size() == dim);
+    assert(fft_vec.get_result()[0].first == spike_idx);
+    assert(fft_vec.get_result()[0].second == 0);
+    assert(fft_vec.get_result()[1].first == spike_idx);
+    assert(fft_vec.get_result()[1].second == 1);
+    assert(fft_vec.get_result()[2].first == spike_idx);
+    assert(fft_vec.get_result()[2].second == 2);
+    assert(fft_ary.get_result().size() == dim);
+    assert(fft_ary.get_result()[0].first == spike_idx);
+    assert(fft_ary.get_result()[0].second == 0);
+    assert(fft_ary.get_result()[1].first == spike_idx);
+    assert(fft_ary.get_result()[1].second == 1);
+    assert(fft_ary.get_result()[2].first == spike_idx);
+    assert(fft_ary.get_result()[2].second == 2);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_remove_data_by_fft()  {
+
+    std::cout << "\nTesting remove_data_by_fft( ) ..." << std::endl;
+
+    constexpr std::size_t   item_cnt = 1024;
+    MyStdDataFrame          df;
+
+    df.load_index(MyStdDataFrame::gen_sequence_index(0, item_cnt, 1));
+
+    std::vector<double>   sine_col;
+
+    sine_col.reserve(item_cnt);
+    for (std::size_t i = 0; i < item_cnt; ++i)  {
+        sine_col.push_back(std::sin(2.0 * M_PI * i / 20.0)); // Base sine wave
+        if (i % 30 == 0)  sine_col.back() += 2.0;  // Inject anomalies
+    }
+    df.load_column("sine col", std::move(sine_col));
+
+    MyStdDataFrame  df2 = df;
+
+    auto    lbd =
+        [](const unsigned long &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double>("sine col", lbd);
+
+    assert((df.get_column<double>("sine col").size() == 1024));
+    assert((view.get_column<double>("sine col").size() == 1024));
+
+    // Keep at least 10% of the frequencies as dominant frequencies.
+    //
+    df.remove_data_by_fft<double, double>("sine col", 100, 1.0);
+    assert((df.get_column<double>("sine col").size() == (1024 - 35)));
+
+    view.remove_data_by_fft<double, double>("sine col", 100, 1.0);
+    assert((view.get_column<double>("sine col").size() == (1024 - 35)));
+
+    // Now do the same thing for IBM market data
+    //
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+    ibm.get_column<double>("IBM_Close")[502] = 800.0;
+    ibm.get_column<double>("IBM_Close")[1001] = 900.0;
+    ibm.get_column<double>("IBM_Close")[2002] = 850.0;
+
+    StrDataFrame    ibm2 = ibm;
+    auto            ibm_lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto            ibm_view =
+        ibm2.get_view_by_sel<double, decltype(ibm_lbd), double, long>
+            ("IBM_Open", ibm_lbd);
+
+    ibm_view.get_column<double>("IBM_Close")[502] = 800.0;
+    ibm_view.get_column<double>("IBM_Close")[1001] = 900.0;
+    ibm_view.get_column<double>("IBM_Close")[2002] = 850.0;
+
+    assert((ibm.get_column<double>("IBM_Open").size() == 5031));
+    assert((ibm_view.get_column<double>("IBM_Open").size() == 5031));
+
+    ibm.remove_data_by_fft<double, double, long>("IBM_Close", 1000, 250,
+                                                 normalization_type::z_score);
+    assert((ibm.get_column<double>("IBM_Open").size() == (5031 - 3)));
+
+    ibm_view.remove_data_by_fft<double, double, long>
+        ("IBM_Close", 1000, 250, normalization_type::z_score);
+    assert((ibm_view.get_column<double>("IBM_Open").size() == (5031 - 3)));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_AnomalyDetectByIQRVisitor()  {
+
+    std::cout << "\nTesting AnomalyDetectByIQRVisitor{ } ..." << std::endl;
+
+    constexpr std::size_t   item_cnt = 1024;
+    MyStdDataFrame          df;
+
+    df.load_index(MyStdDataFrame::gen_sequence_index(0, item_cnt, 1));
+
+    std::vector<double>   sine_col;
+
+    sine_col.reserve(item_cnt);
+    for (std::size_t i = 0; i < item_cnt; ++i)  {
+        sine_col.push_back(std::sin(2.0 * M_PI * i / 20.0)); // Base sine wave
+        if (i % 30 == 0)  sine_col.back() += 2.0;  // Inject anomalies
+    }
+    df.load_column("sine col", std::move(sine_col));
+
+    and_iqr_v<double>               anomaly1(0.5, 0.5);
+    const std::vector<std::size_t>  result1 =
+        { 0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360, 390, 420,
+          450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840,
+          870, 900, 930, 960, 990, 1020 };
+
+    df.single_act_visit<double>("sine col", anomaly1);
+    assert((anomaly1.get_result() == result1));
+
+    // Now do the same thing for IBM market data
+    //
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+    ibm.get_column<double>("IBM_Close")[502] = 800.0;
+    ibm.get_column<double>("IBM_Close")[1001] = 900.0;
+    ibm.get_column<double>("IBM_Close")[2002] = 850.0;
+
+    and_iqr_v<double>               anomaly2;
+    const std::vector<std::size_t>  result2 = { 502, 1001, 2002 };
+
+    ibm.single_act_visit<double>("IBM_Close", anomaly2);
+    assert((anomaly2.get_result() == result2));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_AnomalyDetectByZScoreVisitor()  {
+
+    std::cout << "\nTesting AnomalyDetectByZScoreVisitor{ } ..." << std::endl;
+
+    constexpr std::size_t   item_cnt = 1024;
+    MyStdDataFrame          df;
+
+    df.load_index(MyStdDataFrame::gen_sequence_index(0, item_cnt, 1));
+
+    std::vector<double>   sine_col;
+
+    sine_col.reserve(item_cnt);
+    for (std::size_t i = 0; i < item_cnt; ++i)  {
+        sine_col.push_back(std::sin(2.0 * M_PI * i / 20.0)); // Base sine wave
+        if (i % 30 == 0)  sine_col.back() += 2.0;  // Inject anomalies
+    }
+    df.load_column("sine col", std::move(sine_col));
+
+    and_zscr_v<double>              anomaly1 { 2.0 };
+    const std::vector<std::size_t>  result1 =
+        { 0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360, 390, 420,
+          450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840,
+          870, 900, 930, 960, 990, 1020 };
+
+    df.single_act_visit<double>("sine col", anomaly1);
+    assert((anomaly1.get_result() == result1));
+
+    // Now do the same thing for IBM market data
+    //
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+    ibm.get_column<double>("IBM_Close")[502] = 800.0;
+    ibm.get_column<double>("IBM_Close")[1001] = 900.0;
+    ibm.get_column<double>("IBM_Close")[2002] = 850.0;
+
+    and_zscr_v<double>              anomaly2 { 15.0 };
+    const std::vector<std::size_t>  result2 = { 502, 1001, 2002 };
+
+    ibm.single_act_visit<double>("IBM_Close", anomaly2);
+    assert((anomaly2.get_result() == result2));
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<vec_col_t>  vec_col  {
+        {  0.1, 99.8, -50.1 },   // normal
+        {  0.2, 100.1, -49.9 },  // normal
+        { -0.1, 100.3, -50.2 },  // normal
+        {  0.0, 99.7, -50.0 },   // normal
+        {  0.3, 100.0, -49.8 },  // normal
+        { -0.2, 99.9, -50.3 },   // normal
+        {  0.1, 100.2, -50.1 },  // normal
+        {  0.0, 100.0, -50.0 },  // normal
+        { -0.1, 99.8, -49.9 },   // normal
+        {  0.2, 100.1, -50.2 },  // normal
+        {  0.1, 99.9, -50.1 },   // normal
+        {  0.0, 100.0, -50.0 },  // normal
+        { -0.2, 100.2, -49.8 },  // normal
+        {  0.1, 99.7, -50.2 },   // normal
+        {  0.3, 100.1, -50.0 },  // normal
+        {  0.0, 99.9, -49.9 },   // normal
+        {  0.2, 100.0, -50.1 },  // normal
+        { -0.1, 100.1, -50.0 },  // normal
+        { 15.0, 100.2, -50.1 },  // ANOMALY: dim 0 spike
+        {  0.1, 99.8, -120.0 },  // ANOMALY: dim 2 spike
+    };
+    std::vector<ary_col_t>  ary_col  {
+        {  0.1, 99.8, -50.1 },   // normal
+        {  0.2, 100.1, -49.9 },  // normal
+        { -0.1, 100.3, -50.2 },  // normal
+        {  0.0, 99.7, -50.0 },   // normal
+        {  0.3, 100.0, -49.8 },  // normal
+        { -0.2, 99.9, -50.3 },   // normal
+        {  0.1, 100.2, -50.1 },  // normal
+        {  0.0, 100.0, -50.0 },  // normal
+        { -0.1, 99.8, -49.9 },   // normal
+        {  0.2, 100.1, -50.2 },  // normal
+        {  0.1, 99.9, -50.1 },   // normal
+        {  0.0, 100.0, -50.0 },  // normal
+        { -0.2, 100.2, -49.8 },  // normal
+        {  0.1, 99.7, -50.2 },   // normal
+        {  0.3, 100.1, -50.0 },  // normal
+        {  0.0, 99.9, -49.9 },   // normal
+        {  0.2, 100.0, -50.1 },  // normal
+        { -0.1, 100.1, -50.0 },  // normal
+        { 15.0, 100.2, -50.1 },  // ANOMALY: dim 0 spike
+        {  0.1, 99.8, -120.0 },  // ANOMALY: dim 2 spike
+    };
+
+    df.load_column<vec_col_t>("COL VEC", std::move(vec_col),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("COL ARY", std::move(ary_col),
+                              nan_policy::dont_pad_with_nans);
+
+    and_zscr_v<vec_col_t>   vec_and_v { 2.5 };
+    and_zscr_v<ary_col_t>   ary_and_v { 2.5 };
+
+    df.single_act_visit<vec_col_t>("COL VEC", vec_and_v);
+    df.single_act_visit<ary_col_t>("COL ARY", ary_and_v);
+    assert(vec_and_v.get_result().size() == 2);
+    assert(vec_and_v.get_result()[0].first == 18);
+    assert(vec_and_v.get_result()[0].second == 0);
+    assert(vec_and_v.get_result()[1].first == 19);
+    assert(vec_and_v.get_result()[1].second == 2);
+    assert(ary_and_v.get_result().size() == 2);
+    assert(ary_and_v.get_result()[0].first == 18);
+    assert(ary_and_v.get_result()[0].second == 0);
+    assert(ary_and_v.get_result()[1].first == 19);
+    assert(ary_and_v.get_result()[1].second == 2);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_remove_data_by_iqr()  {
+
+    std::cout << "\nTesting remove_data_by_iqr( ) ..." << std::endl;
+
+    constexpr std::size_t   item_cnt = 1024;
+    MyStdDataFrame          df;
+
+    df.load_index(MyStdDataFrame::gen_sequence_index(0, item_cnt, 1));
+
+    std::vector<double>   sine_col;
+
+    sine_col.reserve(item_cnt);
+    for (std::size_t i = 0; i < item_cnt; ++i)  {
+        sine_col.push_back(std::sin(2.0 * M_PI * i / 20.0)); // Base sine wave
+        if (i % 30 == 0)  sine_col.back() += 2.0;  // Inject anomalies
+    }
+    df.load_column("sine col", std::move(sine_col));
+
+    MyStdDataFrame  df2 = df;
+
+    auto    lbd =
+        [](const unsigned long &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double>("sine col", lbd);
+
+    assert((df.get_column<double>("sine col").size() == 1024));
+    assert((view.get_column<double>("sine col").size() == 1024));
+
+    df.remove_data_by_iqr<double, double>("sine col", 0.5, 0.5);
+    assert((df.get_column<double>("sine col").size() == (1024 - 35)));
+
+    view.remove_data_by_iqr<double, double>("sine col", 0.5, 0.5);
+    assert((view.get_column<double>("sine col").size() == (1024 - 35)));
+
+    // Now do the same thing for IBM market data
+    //
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+    ibm.get_column<double>("IBM_Close")[502] = 800.0;
+    ibm.get_column<double>("IBM_Close")[1001] = 900.0;
+    ibm.get_column<double>("IBM_Close")[2002] = 850.0;
+
+    StrDataFrame    ibm2 = ibm;
+    auto            ibm_lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto            ibm_view =
+        ibm2.get_view_by_sel<double, decltype(ibm_lbd), double, long>
+            ("IBM_Open", ibm_lbd);
+
+    ibm_view.get_column<double>("IBM_Close")[502] = 800.0;
+    ibm_view.get_column<double>("IBM_Close")[1001] = 900.0;
+    ibm_view.get_column<double>("IBM_Close")[2002] = 850.0;
+
+    assert((ibm.get_column<double>("IBM_Open").size() == 5031));
+    assert((ibm_view.get_column<double>("IBM_Open").size() == 5031));
+
+    ibm.remove_data_by_iqr<double, double, long>("IBM_Close");
+    assert((ibm.get_column<double>("IBM_Open").size() == (5031 - 3)));
+
+    ibm_view.remove_data_by_iqr<double, double, long>("IBM_Close");
+    assert((ibm_view.get_column<double>("IBM_Open").size() == (5031 - 3)));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_remove_data_by_zscore()  {
+
+    std::cout << "\nTesting remove_data_by_zscore( ) ..." << std::endl;
+
+    constexpr std::size_t   item_cnt = 1024;
+    MyStdDataFrame          df;
+
+    df.load_index(MyStdDataFrame::gen_sequence_index(0, item_cnt, 1));
+
+    std::vector<double>   sine_col;
+
+    sine_col.reserve(item_cnt);
+    for (std::size_t i = 0; i < item_cnt; ++i)  {
+        sine_col.push_back(std::sin(2.0 * M_PI * i / 20.0)); // Base sine wave
+        if (i % 30 == 0)  sine_col.back() += 2.0;  // Inject anomalies
+    }
+    df.load_column("sine col", std::move(sine_col));
+
+    MyStdDataFrame  df2 = df;
+
+    auto    lbd =
+        [](const unsigned long &, const double &) -> bool { return (true); };
+    auto    view =
+        df2.get_view_by_sel<double, decltype(lbd), double>("sine col", lbd);
+
+    assert((df.get_column<double>("sine col").size() == 1024));
+    assert((view.get_column<double>("sine col").size() == 1024));
+
+    df.remove_data_by_zscore<double, double>("sine col", 2.0);
+    assert((df.get_column<double>("sine col").size() == (1024 - 35)));
+
+    view.remove_data_by_zscore<double, double>("sine col", 2.0);
+    assert((view.get_column<double>("sine col").size() == (1024 - 35)));
+
+    // Now do the same thing for IBM market data
+    //
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+    ibm.get_column<double>("IBM_Close")[502] = 800.0;
+    ibm.get_column<double>("IBM_Close")[1001] = 900.0;
+    ibm.get_column<double>("IBM_Close")[2002] = 850.0;
+
+    StrDataFrame    ibm2 = ibm;
+    auto            ibm_lbd =
+        [](const std::string &, const double &) -> bool { return (true); };
+    auto            ibm_view =
+        ibm2.get_view_by_sel<double, decltype(ibm_lbd), double, long>
+            ("IBM_Open", ibm_lbd);
+
+    ibm_view.get_column<double>("IBM_Close")[502] = 800.0;
+    ibm_view.get_column<double>("IBM_Close")[1001] = 900.0;
+    ibm_view.get_column<double>("IBM_Close")[2002] = 850.0;
+
+    assert((ibm.get_column<double>("IBM_Open").size() == 5031));
+    assert((ibm_view.get_column<double>("IBM_Open").size() == 5031));
+
+    ibm.remove_data_by_zscore<double, double, long>("IBM_Close", 15.0);
+    assert((ibm.get_column<double>("IBM_Open").size() == (5031 - 3)));
+
+    ibm_view.remove_data_by_zscore<double, double, long>("IBM_Close", 15.0);
+    assert((ibm_view.get_column<double>("IBM_Open").size() == (5031 - 3)));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_AnomalyDetectByLOFVisitor()  {
+
+    std::cout << "\nTesting AnomalyDetectByLOFVisitor{ } ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+    ibm.get_column<double>("IBM_Adj_Close")[502] = 800.0;
+    ibm.get_column<double>("IBM_Adj_Close")[1001] = 900.0;
+    ibm.get_column<double>("IBM_Adj_Close")[2002] = 450.0;
+    ibm.get_column<double>("IBM_Adj_Close")[5000] = 1.5;
+    ibm.get_column<double>("IBM_Adj_Close")[5030] = 20.0;
+
+    and_lof_v<double, std::string>  anomaly { 10, 2.0 };
+
+    ibm.single_act_visit<double>("IBM_Adj_Close", anomaly);
+
+    const std::vector<std::size_t>  result = { 502, 1001, 2002, 5000 };
+
+    assert((anomaly.get_result() == result));
+
+    constexpr std::size_t   item_cnt = 1024;
+    MyStdDataFrame          df2;
+
+    df2.load_index(MyStdDataFrame::gen_sequence_index(0, item_cnt, 1));
+
+    std::vector<double>   sine_col;
+
+    sine_col.reserve(item_cnt);
+    for (std::size_t i = 0; i < item_cnt; ++i)  {
+        sine_col.push_back(std::sin(2.0 * M_PI * i / 20.0)); // Base sine wave
+        if (i % 30 == 0)  sine_col.back() += 10.0;  // Inject anomalies
+    }
+    df2.load_column("sine col", std::move(sine_col));
+
+    and_lof_v<double>   anomaly2 { 10, 1.5 };
+
+    // It doesn't work for sine wave data. All the scores are 1.
+    //
+    df2.single_act_visit<double>("sine col", anomaly2);
+    assert(anomaly2.get_result().empty());
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 3 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<vec_col_t>  vec_col  {
+        {  0.1, 99.8, -50.1 },   // normal
+        {  0.2, 100.1, -49.9 },  // normal
+        { -0.1, 100.3, -50.2 },  // normal
+        {  0.0, 99.7, -50.0 },   // normal
+        {  0.3, 100.0, -49.8 },  // normal
+        { -0.2, 99.9, -50.3 },   // normal
+        {  0.1, 100.2, -50.1 },  // normal
+        {  0.0, 100.0, -50.0 },  // normal
+        { -0.1, 99.8, -49.9 },   // normal
+        {  0.2, 100.1, -50.2 },  // normal
+        {  0.1, 99.9, -50.1 },   // normal
+        {  0.0, 100.0, -50.0 },  // normal
+        { -0.2, 100.2, -49.8 },  // normal
+        {  0.1, 99.7, -50.2 },   // normal
+        {  0.3, 100.1, -50.0 },  // normal
+        {  0.0, 99.9, -49.9 },   // normal
+        {  0.2, 100.0, -50.1 },  // normal
+        { -0.1, 100.1, -50.0 },  // normal
+        { 15.0, 100.2, -50.1 },  // ANOMALY: dim 0 spike
+        {  0.1, 99.8, -120.0 },  // ANOMALY: dim 2 spike
+    };
+    std::vector<ary_col_t>  ary_col  {
+        {  0.1, 99.8, -50.1 },   // normal
+        {  0.2, 100.1, -49.9 },  // normal
+        { -0.1, 100.3, -50.2 },  // normal
+        {  0.0, 99.7, -50.0 },   // normal
+        {  0.3, 100.0, -49.8 },  // normal
+        { -0.2, 99.9, -50.3 },   // normal
+        {  0.1, 100.2, -50.1 },  // normal
+        {  0.0, 100.0, -50.0 },  // normal
+        { -0.1, 99.8, -49.9 },   // normal
+        {  0.2, 100.1, -50.2 },  // normal
+        {  0.1, 99.9, -50.1 },   // normal
+        {  0.0, 100.0, -50.0 },  // normal
+        { -0.2, 100.2, -49.8 },  // normal
+        {  0.1, 99.7, -50.2 },   // normal
+        {  0.3, 100.1, -50.0 },  // normal
+        {  0.0, 99.9, -49.9 },   // normal
+        {  0.2, 100.0, -50.1 },  // normal
+        { -0.1, 100.1, -50.0 },  // normal
+        { 15.0, 100.2, -50.1 },  // ANOMALY: dim 0 spike
+        {  0.1, 99.8, -120.0 },  // ANOMALY: dim 2 spike
+    };
+
+    df2.load_column<vec_col_t>("COL VEC", std::move(vec_col),
+                               nan_policy::dont_pad_with_nans);
+    df2.load_column<ary_col_t>("COL ARY", std::move(ary_col),
+                               nan_policy::dont_pad_with_nans);
+
+    and_lof_v<vec_col_t>    vec_lof { 4, 10.0 };
+    and_lof_v<ary_col_t>    ary_lof { 4, 10.0 };
+
+    df2.single_act_visit<vec_col_t>("COL VEC", vec_lof);
+    df2.single_act_visit<ary_col_t>("COL ARY", ary_lof);
+    assert(vec_lof.get_result().size() == 2);
+    assert(vec_lof.get_result()[0] == 18);
+    assert(vec_lof.get_result()[1] == 19);
+    assert(ary_lof.get_result().size() == 2);
+    assert(ary_lof.get_result()[0] == 18);
+    assert(ary_lof.get_result()[1] == 19);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_detect_and_change()  {
+
+    std::cout << "\nTesting detect_and_change( ) ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    auto    &close_col = ibm.get_column<double>("IBM_Close");
+    auto    &open_col = ibm.get_column<double>("IBM_Open");
+
+    {
+        close_col[502] = 800.0;
+        close_col[1001] = 900.0;
+        close_col[2002] = 850.0;
+        open_col[2] = 1.0;
+        open_col[3000] = 2.5;
+        open_col[5029] = 850.0;
+
+        ibm.detect_and_change<double>({ "IBM_Close", "IBM_Open" },
+                                      detect_method::zscore,
+                                      fill_policy::fill_forward,
+                                      { .threshold = 3.0 });
+
+        assert((std::fabs(close_col[502] - 82.5) < 0.01));
+        assert((std::fabs(close_col[1001] - 89.5) < 0.01));
+        assert((std::fabs(close_col[2002] - 92.51) < 0.01));
+        assert((std::fabs(open_col[2] - 99.0) < 0.01));
+        assert((std::fabs(open_col[3000] - 210.28) < 0.01));
+        assert((std::fabs(open_col[5029] - 108.66) < 0.01));
+    }
+
+    {
+        close_col[502] = 800.0;
+        close_col[1001] = 900.0;
+        close_col[2002] = 850.0;
+        open_col[2] = 1.0;
+        open_col[3000] = 2.5;
+        open_col[5029] = 850.0;
+
+        ibm.detect_and_change<double>({ "IBM_Close", "IBM_Open" },
+                                      detect_method::hampel,
+                                      fill_policy::fill_backward,
+                                      { .window_size = 10,
+                                        .htype = hampel_type::median,
+                                        .num_stdev = 2.0 });
+
+        assert((std::fabs(close_col[502] - 81.54) < 0.01));
+        assert((std::fabs(close_col[1001] - 90.11) < 0.01));
+        assert((std::fabs(close_col[2002] - 83.6) < 0.01));
+        assert((std::fabs(open_col[2] - 1.0) < 0.01)); // It didn't catch it
+        assert((std::fabs(open_col[3000] - 210.02) < 0.01));
+        assert((std::fabs(open_col[5029] - 107.9) < 0.01));
+    }
+
+    {
+        close_col[502] = 800.0;
+        close_col[1001] = 900.0;
+        close_col[2002] = 850.0;
+        open_col[2] = 1.0;
+        open_col[3000] = 2.5;
+        open_col[5029] = 850.0;
+
+        ibm.detect_and_change<double>(
+            { "IBM_Close", "IBM_Open" },
+            detect_method::fft,
+            fill_policy::mid_point,
+            { .threshold = 250.0,
+              .norm_type = normalization_type::z_score,
+              .freq_num = 1000 });
+
+        assert((std::fabs(close_col[502] - 82.02) < 0.01));
+        assert((std::fabs(close_col[1001] - 89.805) < 0.01));
+        assert((std::fabs(close_col[2002] - 88.055) < 0.01));
+        assert((std::fabs(open_col[2] - 1.0) < 0.01));    // It didn't catch it
+        assert((std::fabs(open_col[3000] - 2.5) < 0.01)); // It didn't catch it
+        assert((std::fabs(open_col[5029] - 108.28) < 0.01));
+    }
+
+    // Now we need a DataFrame with a numeric index to be able to use
+    // interpolation
+    //
+    MyDataFrame ford;
+
+    try  {
+        ford.read("FORD.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    auto    &fclose_col = ford.get_column<double>("FORD_Close");
+    auto    &fopen_col = ford.get_column<double>("FORD_Open");
+
+    {
+        fclose_col[502] = 200.0;
+        fclose_col[1001] = 300.0;
+        fclose_col[2002] = 250.0;
+        fopen_col[2] = 0.01;
+        fopen_col[3000] = 0.05;
+        fopen_col[5029] = 850.0;
+
+        ford.detect_and_change<double>({ "FORD_Close", "FORD_Open" },
+                                      detect_method::iqr,
+                                      fill_policy::linear_interpolate,
+                                      { .high_fence = 0.5, .low_fence = 0.5 });
+
+        assert((std::fabs(fclose_col[502] - 1.6889) < 0.0001));
+        assert((std::fabs(fclose_col[1001] - 1.8146) < 0.0001));
+        assert((std::fabs(fclose_col[2002] - 0.9022) < 0.0001));
+        assert((std::fabs(fopen_col[2] - 0.01) < 0.01));    // No catch
+        assert((std::fabs(fopen_col[3000] - 0.05) < 0.01)); // No catch
+        assert((std::fabs(fopen_col[5029] - 7.9947) < 0.0001));
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_KolmoSmirnovTestVisitor()  {
+
+    std::cout << "\nTesting KolmoSmirnovTestVisitor{ } ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    MinVisitor<double, std::string> min_val;
+    MaxVisitor<double, std::string> max_val;
+
+    ibm.single_act_visit<double>("IBM_Close", min_val);
+    ibm.single_act_visit<double>("IBM_Close", max_val);
+
+    const auto              col_s = ibm.get_index().size();
+    RandGenParams<double>   p1 { .min_value = min_val.get_result(),
+                                 .max_value = max_val.get_result() };
+    RandGenParams<double>   p2 { .min_value = min_val.get_result(),
+                                 .max_value = max_val.get_result() };
+
+    p1.mean = 4;
+    p1.std = 2.0;
+    p1.seed = 1056;
+    ibm.load_column("normal 1", gen_normal_dist<double>(col_s, p1));
+
+    p1.mean = 0;
+    p1.std = 1.0;
+    p1.seed = 123;
+    ibm.load_column("normal 2", gen_normal_dist<double>(col_s, p1));
+
+    p2.seed = 123;
+    ibm.load_column("uniform", gen_uniform_real_dist<double>(col_s, p2));
+    ibm.load_column("exponential", gen_exponential_dist<double>(col_s, p2));
+    ibm.load_column("lognormal", gen_lognormal_dist<double>(col_s, p2));
+
+    ks_test_v<double, std::string>  ks_test;
+
+    ibm.single_act_visit<double, double>("IBM_Close", "IBM_Open", ks_test);
+    assert((std::fabs(ks_test.get_result() - 0.0034) < 0.0001));
+    assert((std::fabs(ks_test.get_p_value() - 1.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("IBM_Low", "IBM_High", ks_test);
+    assert((std::fabs(ks_test.get_result() - 0.0296) < 0.0001));
+    assert((std::fabs(ks_test.get_p_value() - 0.023725) < 0.000001));
+
+    ibm.single_act_visit<double, double>("IBM_Close", "uniform", ks_test);
+    assert((std::fabs(ks_test.get_result() - 0.1224) < 0.0001));
+    assert((std::fabs(ks_test.get_p_value() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("IBM_Close", "normal 1", ks_test);
+    assert((std::fabs(ks_test.get_result() - 1.0) < 0.0001));
+    assert((std::fabs(ks_test.get_p_value() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("IBM_Close", "normal 2", ks_test);
+    assert((std::fabs(ks_test.get_result() - 1.0) < 0.0001));
+    assert((std::fabs(ks_test.get_p_value() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("IBM_Close", "lognormal", ks_test);
+    assert((std::fabs(ks_test.get_result() - 0.9998) < 0.0001));
+    assert((std::fabs(ks_test.get_p_value() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("normal 2", "normal 1", ks_test);
+    assert((std::fabs(ks_test.get_result() - 0.8326) < 0.0001));
+    assert((std::fabs(ks_test.get_p_value() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("normal 2", "lognormal", ks_test);
+    assert((std::fabs(ks_test.get_result() - 0.5353) < 0.0001));
+    assert((std::fabs(ks_test.get_p_value() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("IBM_Close", "IBM_Close", ks_test);
+    assert((std::fabs(ks_test.get_result() - 0.0) < 0.0001));
+    assert((std::fabs(ks_test.get_p_value() - 1.0) < 0.0001));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_MannWhitneyUTestVisitor()  {
+
+    std::cout << "\nTesting MannWhitneyUTestVisitor{ } ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    MinVisitor<double, std::string> min_val;
+    MaxVisitor<double, std::string> max_val;
+
+    ibm.single_act_visit<double>("IBM_Close", min_val);
+    ibm.single_act_visit<double>("IBM_Close", max_val);
+
+    const auto              col_s = ibm.get_index().size();
+    RandGenParams<double>   p { .min_value = min_val.get_result(),
+                                .max_value = max_val.get_result(),
+                                .seed = 123 };
+
+    ibm.load_column("uniform", gen_uniform_real_dist<double>(col_s, p));
+    ibm.load_column("exponential", gen_exponential_dist<double>(col_s, p));
+    ibm.load_column("lognormal", gen_lognormal_dist<double>(col_s, p));
+
+    mwu_test_v<double, std::string> mwu_test;
+
+    ibm.single_act_visit<double, double>("IBM_Close", "IBM_Open", mwu_test);
+    assert((std::fabs(mwu_test.get_result() - 12643394.5) < 0.0001));
+    assert((std::fabs(mwu_test.get_u1() - 12667566.5) < 0.0001));
+    assert((std::fabs(mwu_test.get_u2() - 12643394.5) < 0.0001));
+    assert((std::fabs(mwu_test.get_zscore() - 0.082957) < 0.000001));
+    assert((std::fabs(mwu_test.get_pvalue() - 0.933885) < 0.000001));
+
+    ibm.single_act_visit<double, double>("IBM_Low", "IBM_High", mwu_test);
+    assert((std::fabs(mwu_test.get_result() - 12213043.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u1() - 12213043.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u2() - 13097918.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_zscore() - -3.0369) < 0.001));
+    assert((std::fabs(mwu_test.get_pvalue() - 0.0024) < 0.0001));
+
+    ibm.single_act_visit<double, double>("IBM_Close", "uniform", mwu_test);
+    assert((std::fabs(mwu_test.get_result() - 11666858.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u1() - 11666858.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u2() - 13644103.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_zscore() - -6.7858) < 0.001));
+    assert((std::fabs(mwu_test.get_pvalue() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("IBM_Close", "lognormal", mwu_test);
+    assert((std::fabs(mwu_test.get_result() - 30.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u1() - 25310931.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u2() - 30.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_zscore() - 86.8661) < 0.001));
+    assert((std::fabs(mwu_test.get_pvalue() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("uniform", "exponential", mwu_test);
+    assert((std::fabs(mwu_test.get_result() - 0.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u1() - 25310961.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u2() - 0.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_zscore() - 86.8663) < 0.001));
+    assert((std::fabs(mwu_test.get_pvalue() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("exponential", "lognormal", mwu_test);
+    assert((std::fabs(mwu_test.get_result() - 9727387.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u1() - 9727387.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_u2() - 15583574.0) < 0.0001));
+    assert((std::fabs(mwu_test.get_zscore() - -20.0982) < 0.001));
+    assert((std::fabs(mwu_test.get_pvalue() - 0.0) < 0.0001));
+
+    ibm.single_act_visit<double, double>("IBM_Close", "IBM_Close", mwu_test);
+    assert((std::fabs(mwu_test.get_result() - 12655480.5) < 0.0001));
+    assert((std::fabs(mwu_test.get_u1() - 12655480.5) < 0.0001));
+    assert((std::fabs(mwu_test.get_u2() - 12655480.5) < 0.0001));
+    assert((std::fabs(mwu_test.get_zscore() - 0.0) < 0.001));
+    assert((std::fabs(mwu_test.get_pvalue() - 1.0) < 0.0001));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_mask()  {
+
+    std::cout << "\nTesting mask( ) ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    ibm.load_column("close_mask",
+                    ibm.mask<double, char>("IBM_Close",
+                                           [](const double &close) -> char {
+                                               return (close > 180.0);
+                                           })
+                    );
+    ibm.load_column("close_diff",
+                    ibm.mask<double, double>("IBM_Close",
+                                            [](const double &close) -> double {
+                                                return (180.0 - close);
+                                            })
+                    );
+
+    const auto  &close_mask = ibm.get_column<char>("close_mask");
+    const auto  &close_diff = ibm.get_column<double>("close_diff");
+
+    assert(close_mask[0] == 0);
+    assert(close_mask[10] == 0);
+    assert(close_mask[247] == 0);
+    assert(close_mask[1180] == 0);
+    assert(close_mask[2761] == 1);
+    assert(close_mask[2806] == 1);
+    assert(close_mask[3372] == 1);
+    assert(close_mask[4106] == 1);
+    assert(close_mask[4966] == 0);
+    assert(close_mask[5030] == 0);
+
+    assert((std::fabs(close_diff[0] - 81.4375) < 0.0001));
+    assert((std::fabs(close_diff[10] - 80.625) < 0.0001));
+    assert((std::fabs(close_diff[247] - 71.93) < 0.0001));
+    assert((std::fabs(close_diff[1180] - 98.19) < 0.0001));
+    assert((std::fabs(close_diff[2761] - -0.360001) < 0.000001));
+    assert((std::fabs(close_diff[2806] - -6.17999) < 0.0001));
+    assert((std::fabs(close_diff[3372] - -13.55) < 0.0001));
+    assert((std::fabs(close_diff[4106] - -0.529999) < 0.000001));
+    assert((std::fabs(close_diff[4966] - 57.06) < 0.0001));
+    assert((std::fabs(close_diff[5030] - 68.34) < 0.0001));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_fast_ica()  {
+
+    std::cout << "\nTesting fast_ica( ) ..." << std::endl;
+
+    StrDataFrame    df;
+
+    try  {
+        df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  result = df.fast_ica<double>(
+        { "IBM_Close", "IBM_Open", "IBM_High", "IBM_Low" },
+        2,
+        { .seed = 21 });
+
+    assert(result.rows() == 5031);
+    assert(result.cols() == 2);
+    assert((std::fabs(result(0, 0) - -0.42696) < 0.00001));
+    assert((std::fabs(result(0, 1) - 0.285257) < 0.000001));
+    assert((std::fabs(result(678, 0) - 0.682723) < 0.000001));
+    assert((std::fabs(result(678, 1) - 0.070691) < 0.000001));
+    assert((std::fabs(result(1852, 0) - 0.693654) < 0.000001));
+    assert((std::fabs(result(1852, 1) - 0.623284) < 0.000001));
+    assert((std::fabs(result(4008, 0) - 0.56028) < 0.00001));
+    assert((std::fabs(result(4008, 1) - -0.203453) < 0.000001));
+    assert((std::fabs(result(5030, 0) - -2.75905) < 0.00001));
+    assert((std::fabs(result(5030, 1) - -1.04257) < 0.00001));
+
+    // Now multidimensional data
+    //
+    using ary_col_t2 = std::array<double, 2>;
+    using vec_col_t = std::vector<double>;
+
+    std::vector<ary_col_t2> ary_col_1  {
+        { 0.400, 0.300 }, { 0.476, 0.412 }, { 0.535, 0.502 },
+        { 0.563, 0.551 }, { 0.551, 0.543 }, { 0.494, 0.478 },
+        { 0.400, 0.370 }, { 0.278, 0.232 }, { 0.151, 0.089 },
+        { 0.063, -0.021 }, { 0.049, -0.051 }, { 0.122, 0.042 },
+        { 0.263, 0.198 }, { 0.443, 0.378 }, { 0.600, 0.530 },
+        { 0.694, 0.621 }, { 0.694, 0.613 }, { 0.592, 0.494 },
+        { 0.420, 0.312 }, { 0.220, 0.118 }
+    };
+    std::vector<ary_col_t2> ary_col_2  {
+        { 0.560, 0.420 }, { 0.588, 0.496 }, { 0.600, 0.540 },
+        { 0.588, 0.532}, { 0.548, 0.484 }, { 0.484, 0.408 },
+        { 0.400, 0.320 }, { 0.306, 0.228 }, { 0.218, 0.142 },
+        { 0.163, 0.090 }, { 0.163, 0.094 }, { 0.224, 0.158 },
+        { 0.336, 0.264 }, { 0.476, 0.390 }, { 0.608, 0.506 },
+        { 0.694, 0.574 }, { 0.706, 0.578 }, { 0.636, 0.506 },
+        { 0.504, 0.386 }, { 0.360, 0.266 }
+    };
+    std::vector<ary_col_t2> ary_col_3  {
+        { 0.560, 0.350 }, { 0.596, 0.406 }, { 0.616, 0.444 },
+        { 0.608, 0.447 }, { 0.568, 0.417 }, { 0.496, 0.353 },
+        { 0.400, 0.270 }, { 0.290, 0.175 }, { 0.183, 0.082 },
+        { 0.119, 0.022 }, { 0.114, 0.017 }, { 0.175, 0.082 },
+        { 0.295, 0.196 }, { 0.447, 0.342 }, { 0.597, 0.482 },
+        { 0.697, 0.573 }, { 0.716, 0.581 }, { 0.651, 0.502 },
+        { 0.517, 0.364 }, { 0.363, 0.214 }
+    };
+    std::vector<ary_col_t2> ary_col_4  {
+        { 0.520, 0.440 }, { 0.558, 0.506 }, { 0.582, 0.548 },
+        { 0.578, 0.546 }, { 0.542, 0.506 }, { 0.478, 0.438 },
+        { 0.400, 0.360 }, { 0.314, 0.270 }, { 0.230, 0.181 },
+        { 0.178, 0.130 }, { 0.182, 0.138 }, { 0.246, 0.202 },
+        { 0.358, 0.298 }, { 0.490, 0.418 }, { 0.614, 0.532 },
+        { 0.694, 0.604 }, { 0.698, 0.604 }, { 0.622, 0.524 },
+        { 0.490, 0.390 }, { 0.350, 0.276 }
+    };
+
+    std::vector<vec_col_t>  vec_col_1  {
+        { 0.400, 0.300 }, { 0.476, 0.412 }, { 0.535, 0.502 },
+        { 0.563, 0.551 }, { 0.551, 0.543 }, { 0.494, 0.478 },
+        { 0.400, 0.370 }, { 0.278, 0.232 }, { 0.151, 0.089 },
+        { 0.063, -0.021 }, { 0.049, -0.051 }, { 0.122, 0.042 },
+        { 0.263, 0.198 }, { 0.443, 0.378 }, { 0.600, 0.530 },
+        { 0.694, 0.621 }, { 0.694, 0.613 }, { 0.592, 0.494 },
+        { 0.420, 0.312 }, { 0.220, 0.118 }
+    };
+    std::vector<vec_col_t>  vec_col_2  {
+        { 0.560, 0.420 }, { 0.588, 0.496 }, { 0.600, 0.540 },
+        { 0.588, 0.532}, { 0.548, 0.484 }, { 0.484, 0.408 },
+        { 0.400, 0.320 }, { 0.306, 0.228 }, { 0.218, 0.142 },
+        { 0.163, 0.090 }, { 0.163, 0.094 }, { 0.224, 0.158 },
+        { 0.336, 0.264 }, { 0.476, 0.390 }, { 0.608, 0.506 },
+        { 0.694, 0.574 }, { 0.706, 0.578 }, { 0.636, 0.506 },
+        { 0.504, 0.386 }, { 0.360, 0.266 }
+    };
+    std::vector<vec_col_t>  vec_col_3  {
+        { 0.560, 0.350 }, { 0.596, 0.406 }, { 0.616, 0.444 },
+        { 0.608, 0.447 }, { 0.568, 0.417 }, { 0.496, 0.353 },
+        { 0.400, 0.270 }, { 0.290, 0.175 }, { 0.183, 0.082 },
+        { 0.119, 0.022 }, { 0.114, 0.017 }, { 0.175, 0.082 },
+        { 0.295, 0.196 }, { 0.447, 0.342 }, { 0.597, 0.482 },
+        { 0.697, 0.573 }, { 0.716, 0.581 }, { 0.651, 0.502 },
+        { 0.517, 0.364 }, { 0.363, 0.214 }
+    };
+    std::vector<vec_col_t>  vec_col_4  {
+        { 0.520, 0.440 }, { 0.558, 0.506 }, { 0.582, 0.548 },
+        { 0.578, 0.546 }, { 0.542, 0.506 }, { 0.478, 0.438 },
+        { 0.400, 0.360 }, { 0.314, 0.270 }, { 0.230, 0.181 },
+        { 0.178, 0.130 }, { 0.182, 0.138 }, { 0.246, 0.202 },
+        { 0.358, 0.298 }, { 0.490, 0.418 }, { 0.614, 0.532 },
+        { 0.694, 0.604 }, { 0.698, 0.604 }, { 0.622, 0.524 },
+        { 0.490, 0.390 }, { 0.350, 0.276 }
+    };
+
+    df.load_column<ary_col_t2>("ARY COL 1", std::move(ary_col_1),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t2>("ARY COL 2", std::move(ary_col_2),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t2>("ARY COL 3", std::move(ary_col_3),
+                               nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t2>("ARY COL 4", std::move(ary_col_4),
+                               nan_policy::dont_pad_with_nans);
+
+    df.load_column<vec_col_t>("VEC COL 1", std::move(vec_col_1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC COL 2", std::move(vec_col_2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC COL 3", std::move(vec_col_3),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("VEC COL 4", std::move(vec_col_4),
+                              nan_policy::dont_pad_with_nans);
+
+    const auto  ary_col_res = df.fast_ica<ary_col_t2>(
+        { "ARY COL 1", "ARY COL 2", "ARY COL 3" },
+        3,
+        { .num_iter = 1000, .epsilon = 1e-6, .seed = 21 });
+    const auto  vec_col_res = df.fast_ica<vec_col_t>(
+        { "VEC COL 1", "VEC COL 2", "VEC COL 3" },
+        3,
+        { .num_iter = 1000, .epsilon = 1e-6, .seed = 21 });
+
+    assert(ary_col_res.cols() == 3);
+    assert(ary_col_res.rows() == 20);
+    assert(vec_col_res.cols() == 3);
+    assert(vec_col_res.rows() == 20);
+
+    assert(std::abs(ary_col_res(0, 0) - 1.65614) < 0.00001);
+    assert(std::abs(ary_col_res(0, 1) - 3.46064) < 0.00001);
+    assert(std::abs(ary_col_res(0, 2) - -0.065332) < 0.000001);
+    assert(std::abs(ary_col_res(9, 0) - 1.33882) < 0.00001);
+    assert(std::abs(ary_col_res(9, 1) - -0.886272) < 0.000001);
+    assert(std::abs(ary_col_res(15, 2) - -1.96797) < 0.00001);
+    assert(std::abs(ary_col_res(19, 0) - 1.03096) < 0.00001);
+    assert(std::abs(ary_col_res(19, 1) - -0.793463) < 0.000001);
+    assert(std::abs(ary_col_res(19, 2) - 0.46598) < 0.00001);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_DateTime_write()  {
+
+    std::cout << "\nTesting test_DateTime_write( ) ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_sample.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    df.write<std::ostream, double, long, DateTime>
+        (std::cout, io_format::csv2, { .max_recs = 5 });
+    std::cout << "\n\n\n";
+
+    df.write<std::ostream, double, long, DateTime>
+        (std::cout, io_format::csv2,
+         { .max_recs = 5, .dt_format = DT_FORMAT::ISO_DT_TM });
+    std::cout << "\n\n\n";
+
+    df.write<std::ostream, double, long, DateTime>
+        (std::cout, io_format::csv2,
+         { .max_recs = 5, .dt_format = DT_FORMAT::AMR_DT_TM });
+    std::cout << "\n\n\n";
+
+    df.write<std::ostream, double, long, DateTime>
+        (std::cout, io_format::csv2,
+         { .max_recs = 5, .dt_format = DT_FORMAT::EUR_DT_TM });
+    std::cout << "\n\n\n";
+
+    df.write<std::ostream, double, long, DateTime>
+        (std::cout, io_format::csv2,
+         { .max_recs = 5, .dt_format = DT_FORMAT::ISO_DT });
+    std::cout << "\n\n\n";
+
+    df.write<std::ostream, double, long, DateTime>
+        (std::cout, io_format::csv2,
+         { .max_recs = 5, .dt_format = DT_FORMAT::AMR_DT });
+    std::cout << "\n\n\n";
+
+    df.write<std::ostream, double, long, DateTime>
+        (std::cout, io_format::csv2,
+         { .max_recs = 5, .dt_format = DT_FORMAT::EUR_DT });
+    std::cout << "\n\n\n";
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_read_selected_cols_from_file()  {
+
+    std::cout << "\nTesting test_read_selected_cols_from_file{ } ..."
+              << std::endl;
+
+    MyDataFrame             df1;
+    MyDataFrame             df2;
+    ReadParams::SchemaVec   schema1 {  // First is always the index column
+        { .col_type = file_dtypes::ULONG, .num_rows = 12, .col_idx = 0 },
+        { "Close", file_dtypes::DOUBLE, 12, 4 },
+        { "Volume", file_dtypes::LONG, 12, 6 },
+    };
+    ReadParams::SchemaVec   schema2 {  // First is always the index column
+        { .col_type = file_dtypes::ULONG, .num_rows = 12, .col_idx = 0 },
+        { "Open", file_dtypes::DOUBLE, 12, 1 },
+        { "Low", file_dtypes::DOUBLE, 12, 3 },
+        { "Close", file_dtypes::DOUBLE, 12, 4 },
+    };
+
+    try  {
+        df1.read("SchemaWithHeader.csv", io_format::csv2,
+                 { .schema = schema1 });
+        df2.read("SchemaWithoutHeader.csv", io_format::csv2,
+                 { .skip_first_line = false, .schema = schema2 });
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  df_shape1 = df1.shape();
+    const auto  df_shape2 = df2.shape();
+
+    assert(df_shape1.first == 12);  // Rows
+    assert(df_shape1.second == 2);  // Columns
+    assert(df_shape2.first == 12);  // Rows
+    assert(df_shape2.second == 3);  // Columns
+
+    assert(df1.get_index()[0] == 1);
+    assert(df1.get_index()[6] == 7);
+    assert(df1.get_index()[11] == 12);
+    assert(df1.get_column<double>("Close").size() == 12);
+    assert((std::fabs(df1.get_column<double>("Close")[0] - 185.53) < 0.01));
+    assert((std::fabs(df1.get_column<double>("Close")[6] - 187.26) < 0.01));
+    assert((std::fabs(df1.get_column<double>("Close")[11] - 190.09) < 0.01));
+    assert(df1.get_column<long>("Volume").size() == 12);
+    assert(df1.get_column<long>("Volume")[0] == 4546500);
+    assert(df1.get_column<long>("Volume")[6] == 4022400);
+    assert(df1.get_column<long>("Volume")[11] == 7644600);
+
+    assert(df2.get_index()[0] == 1);
+    assert(df2.get_index()[6] == 7);
+    assert(df2.get_index()[11] == 12);
+    assert(df2.get_column<double>("Close").size() == 12);
+    assert((std::fabs(df2.get_column<double>("Close")[0] - 185.53) < 0.01));
+    assert((std::fabs(df2.get_column<double>("Close")[6] - 187.26) < 0.01));
+    assert((std::fabs(df2.get_column<double>("Close")[11] - 190.09) < 0.01));
+    assert(df2.get_column<double>("Open").size() == 12);
+    assert((std::fabs(df2.get_column<double>("Open")[0] - 187.21) < 0.01));
+    assert((std::fabs(df2.get_column<double>("Open")[6] - 188.31) < 0.01));
+    assert((std::fabs(df2.get_column<double>("Open")[11] - 188.04) < 0.01));
+    assert(df2.get_column<double>("Low").size() == 12);
+    assert((std::fabs(df2.get_column<double>("Low")[0] - 185.2) < 0.1));
+    assert((std::fabs(df2.get_column<double>("Low")[6] - 186.28) < 0.01));
+    assert((std::fabs(df2.get_column<double>("Low")[11] - 187.86) < 0.01));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_MutualInfoVisitor()  {
+
+    std::cout << "\nTesting MutualInfoVisitor{ } ..." << std::endl;
+
+    using MyDataFrame = StdDataFrame<unsigned long>;
+
+    MyDataFrame                 df;
+    std::vector<unsigned long>  idxvec =
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 15, 16, 17, 18,
+          19, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 };
+    std::vector<std::string>    strvec =
+        { "zz", "bb", "cc", "ww", "ee", "ff", "gg", "hh", "ii", "jj", "kk",
+          "ll", "mm", "nn", "oo" };
+    RandGenParams<int>          p;
+
+    p.seed = 123;
+    p.max_value = 4;
+    p.min_value = -4;
+    df.load_data(std::move(idxvec),
+                 std::make_pair("int_col_1",
+                                gen_uniform_int_dist<int>(idxvec.size(), p)),
+                 std::make_pair("str_col", strvec));
+    p.seed = 675;
+    df.load_column("int_col_2", gen_uniform_int_dist<int>(idxvec.size(), p));
+
+    std::vector<int>    intcol3(df.get_index().size());
+    const auto          int_col_1 = df.get_column<int>("int_col_1");
+
+    for (std::size_t i { 0 }; i < intcol3.size(); ++i)  {
+        if (int_col_1[i] >= 0)  intcol3[i] = 1;
+        else  intcol3[i] = -1;
+    }
+    df.load_column("int_col_3", intcol3);
+
+    MutualInfoVisitor<int>  minfo;
+
+    df.single_act_visit<int, int>("int_col_1", "int_col_1", minfo);
+    assert((std::fabs(minfo.get_result() - 2.89425) < 0.00001));
+
+    df.single_act_visit<int, int>("int_col_1", "int_col_2", minfo);
+    assert((std::fabs(minfo.get_result() - 1.22157) < 0.00001));
+
+    df.single_act_visit<int, int>("int_col_1", "int_col_3", minfo);
+    assert((std::fabs(minfo.get_result() - 0.954434) < 0.000001));
+
+    // Now multidimensional data
+    //
+    constexpr std::size_t   dim { 2 };
+
+    using ary_col_t = std::array<double, dim>;
+    using vec_col_t = std::vector<double>;
+
+    const std::vector<double>   a { 1.0, 0.0 };
+    const std::vector<double>   b { 0.0, 1.0 };
+
+    std::vector<vec_col_t>  vec_col_x1  { a, b, { 1.0, 1.0 } };
+    std::vector<ary_col_t>  ary_col_y1  {
+        { 1.0, 0.0 }, { 0.0, 1.0 }, { 1.0, 1.0 },
+    };
+    std::vector<vec_col_t>  vec_col_x2 { a, a, a, b, b, b, b, a };
+    std::vector<vec_col_t>  vec_col_x3 { a, a, b, b, b, b, a, a };
+    std::vector<vec_col_t>  vec_col_x4 {
+        { 4.5, 5.6 }, { 3.25, 50,6 }, { 7.6, 66.66 }, {80.1, 80.2 },
+        { 90.1, 90.2 }, { 33.56, 45.4 }, { 22.2, 23.2 }, { 11.1, 45.2 }
+    };
+
+    df.load_column<vec_col_t>("COL VEC1", std::move(vec_col_x1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<ary_col_t>("COL ARY1", std::move(ary_col_y1),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("COL VEC2", std::move(vec_col_x2),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("COL VEC3", std::move(vec_col_x3),
+                              nan_policy::dont_pad_with_nans);
+    df.load_column<vec_col_t>("COL VEC4", std::move(vec_col_x4),
+                              nan_policy::dont_pad_with_nans);
+
+    MutualInfoVisitor<vec_col_t>    mi_vec;
+    MutualInfoVisitor<ary_col_t>    mi_ary;
+
+    df.single_act_visit<vec_col_t, vec_col_t>("COL VEC1", "COL VEC1", mi_vec);
+    df.single_act_visit<ary_col_t, ary_col_t>("COL ARY1", "COL ARY1", mi_ary);
+    assert((std::fabs(mi_vec.get_result() - 1.58496) < 0.00001));
+    assert((std::fabs(mi_ary.get_result() - 1.58496) < 0.00001));
+
+    df.single_act_visit<vec_col_t, vec_col_t>("COL VEC2", "COL VEC2", mi_vec);
+    assert((std::fabs(mi_vec.get_result() - 1.0) < 0.000000001));
+
+    df.single_act_visit<vec_col_t, vec_col_t>("COL VEC2", "COL VEC4", mi_vec);
+    assert((std::fabs(mi_vec.get_result() - 1.0) < 0.000000001));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_io_format_csv2_with_bars()  {
+
+    std::cout << "\nTesting io_format_csv2_with_bars( ) ..." << std::endl;
+
+    MyDataFrame df_read;
+
+    try  {
+        df_read.read("csv2_format_data_with_bars.csv",
+                     io_format::csv2,
+                     { .delim = '|' });
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+    df_read.write<std::ostream,
+                  int,
+                  unsigned long,
+                  unsigned char,
+                  char,
+                  double,
+                  bool,
+                  std::string>(std::cout, io_format::csv2);
+    std::cout << "\n\n";
+    df_read.write<std::ostream,
+                  int,
+                  unsigned long,
+                  unsigned char,
+                  char,
+                  double,
+                  bool,
+                  std::string>(std::cout, io_format::csv2, { .delim = '|' });
+}
+
+// -----------------------------------------------------------------------------
+
+static void test_AndersonDarlingTestVisitor()  {
+
+    std::cout << "\nTesting AndersonDarlingTestVisitor{ } ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto              col_s = ibm.get_index().size();
+    RandGenParams<double>   p1 { .min_value = 99,
+                                 .max_value = 200,
+                                 .seed = 123 };
+
+    ibm.load_column("uniform", gen_uniform_real_dist<double>(col_s, p1));
+    ibm.load_column("exponential", gen_exponential_dist<double>(col_s, p1));
+    ibm.load_column("lognormal", gen_lognormal_dist<double>(col_s, p1));
+    ibm.load_column("normal", gen_normal_dist<double>(col_s, p1));
+
+    RandGenParams<double>   p2 { .seed = 123, .mean = 0, .std = 1.0 };
+
+    ibm.load_column("std_normal", gen_normal_dist<double>(col_s, p2));
+
+    AndersonDarlingTestVisitor<double, std::string> adt;
+
+    ibm.single_act_visit<double>("IBM_Close", adt);
+    assert((std::fabs(adt.get_result() - 63.9697) < 0.0001));
+    assert((std::fabs(adt.get_p_value() - 1.02759e-125) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("uniform", adt);
+    assert((std::fabs(adt.get_result() - 56.7522) < 0.0001));
+    assert((std::fabs(adt.get_p_value() - 7.38848e-115) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("exponential", adt);
+    assert((std::fabs(adt.get_result() - 229.787) < 0.001));
+    assert((std::fabs(adt.get_p_value() - 2.29024e-143) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("lognormal", adt);
+    assert((! std::isfinite(adt.get_result())));
+    assert(std::isnan(adt.get_p_value()));
+
+    ibm.single_act_visit<double>("normal", adt);
+    assert((std::fabs(adt.get_result() - 0.26783) < 0.00001));
+    assert((std::fabs(adt.get_p_value() - 0.68509) < 0.00001));
+
+    ibm.single_act_visit<double>("std_normal", adt);
+    assert((std::fabs(adt.get_result() - 0.26783) < 0.00001));
+    assert((std::fabs(adt.get_p_value() - 0.68509) < 0.00001));
+}
+
+// -----------------------------------------------------------------------------
+
+static void test_ShapiroWilkTestVisitor()  {
+
+    std::cout << "\nTesting ShapiroWilkTestVisitor{ } ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto              col_s = ibm.get_index().size();
+    RandGenParams<double>   p1 { .min_value = 99,
+                                 .max_value = 200,
+                                 .seed = 123 };
+
+    ibm.load_column("uniform", gen_uniform_real_dist<double>(col_s, p1));
+    ibm.load_column("exponential", gen_exponential_dist<double>(col_s, p1));
+    ibm.load_column("lognormal", gen_lognormal_dist<double>(col_s, p1));
+    ibm.load_column("normal", gen_normal_dist<double>(col_s, p1));
+
+    RandGenParams<double>   p2 { .seed = 123, .mean = 0, .std = 1.0 };
+
+    ibm.load_column("std_normal", gen_normal_dist<double>(col_s, p2));
+
+    ShapiroWilkTestVisitor<double, std::string> swt;
+
+    ibm.single_act_visit<double>("IBM_Close", swt);
+    assert((std::fabs(swt.get_result() - 0.953874) < 0.000001));
+    assert((std::fabs(swt.get_p_value() - 3.56659e-37) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("uniform", swt);
+    assert((std::fabs(swt.get_result() - 0.954293) < 0.000001));
+    assert((std::fabs(swt.get_p_value() - 4.8411e-37) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("exponential", swt);
+    assert((std::fabs(swt.get_result() - 0.819813) < 0.000001));
+    assert((std::fabs(swt.get_p_value() - 9.28713e-60) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("lognormal", swt);
+    assert((std::fabs(swt.get_result() - 0.524102) < 0.000001));
+    assert(swt.get_p_value() == 0.0);
+
+    ibm.single_act_visit<double>("normal", swt);
+    assert((std::fabs(swt.get_result() - 0.99974) < 0.00001));
+    assert((std::fabs(swt.get_p_value() - 0.816855) < 0.000001));
+
+    ibm.single_act_visit<double>("std_normal", swt);
+    assert((std::fabs(swt.get_result() - 0.99974) < 0.00001));
+    assert((std::fabs(swt.get_p_value() - 0.816855) < 0.000001));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_CramerVonMisesTestVisitor()  {
+
+    std::cout << "\nTesting CramerVonMisesTestVisitor{ } ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto              col_s = ibm.get_index().size();
+    RandGenParams<double>   p1 { .min_value = 99,
+                                 .max_value = 200,
+                                 .seed = 123 };
+
+    ibm.load_column("uniform", gen_uniform_real_dist<double>(col_s, p1));
+    ibm.load_column("exponential", gen_exponential_dist<double>(col_s, p1));
+    ibm.load_column("lognormal", gen_lognormal_dist<double>(col_s, p1));
+    ibm.load_column("normal", gen_normal_dist<double>(col_s, p1));
+
+    RandGenParams<double>   p2 { .seed = 123, .mean = 0, .std = 1.0 };
+
+    ibm.load_column("std_normal", gen_normal_dist<double>(col_s, p2));
+
+    CramerVonMisesTestVisitor<double, std::string>  cvmt;
+
+    ibm.single_act_visit<double>("IBM_Close", cvmt);
+    assert((std::fabs(cvmt.get_result() - 8.56304) < 0.00001));
+    assert((std::fabs(cvmt.get_p_value() - 2.22045e-16) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("uniform", cvmt);
+    assert((std::fabs(cvmt.get_result() - 7.78703) < 0.00001));
+    assert((std::fabs(cvmt.get_p_value() - 2.22045e-16) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("exponential", cvmt);
+    assert((std::fabs(cvmt.get_result() - 39.0971) < 0.0001));
+    assert((std::fabs(cvmt.get_p_value() - 2.22045e-16) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("lognormal", cvmt);
+    assert((std::fabs(cvmt.get_result() - 96.4868) < 0.0001));
+    assert((std::fabs(cvmt.get_p_value() - 2.22045e-16) < 0.0000000000001));
+
+    ibm.single_act_visit<double>("normal", cvmt);
+    assert((std::fabs(cvmt.get_result() - 0.040035) < 0.000001));
+    assert((std::fabs(cvmt.get_p_value() - 0.99) < 0.01));
+
+    ibm.single_act_visit<double>("std_normal", cvmt);
+    assert((std::fabs(cvmt.get_result() - 0.040035) < 0.000001));
+    assert((std::fabs(cvmt.get_p_value() - 0.99) < 0.01));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_unpivot()  {
+
+    std::cout << "\nTesting unpivot( ) ..." << std::endl;
+
+    ULDataFrame df;
+
+    df.load_data(
+        std::vector<unsigned long>{ 1, 2, 3, 4, 5, 6, 7 },
+        std::make_pair("day",
+                       std::vector<std::string>{ "Monday", "Tuesday",
+                                                 "Wednesday", "Thursday",
+                                                 "Friday", "Saturday", "Sunday"
+                                }),
+        std::make_pair("Chicago",
+                       std::vector<double>{ 32, 30, 28, 22, 30, 20, 25 }),
+        std::make_pair("Tehran",
+                       std::vector<double>{ 75, 77, 75, 82, 83, 81, 77 }),
+        std::make_pair("Berlin",
+                       std::vector<double>{ 41, 43, 45, 38, 30, 45, 47 }),
+        std::make_pair("Str Column",
+                       std::vector<std::string>{ "AA", "BB", "CC", "DD", "EE",
+                                                 "FF", "GG" }));
+
+    df.write<std::ostream, std::string, double>(std::cout, io_format::csv2);
+    std::cout << "\n\n";
+
+    const auto  mdf1 =
+        df.unpivot<std::string, double>
+            ("day", { "Chicago", "Tehran", "Berlin" });
+
+    mdf1.write<std::ostream, std::string, double>(std::cout, io_format::csv2);
+    std::cout << "\n\n";
+
+    const auto  mdf2 = df.unpivot<std::string, double>("day");
+
+    mdf2.write<std::ostream, std::string, double>(std::cout, io_format::csv2);
+
+    assert((mdf1.is_equal<double, std::string>(mdf2)));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_pivot()  {
+
+    std::cout << "\nTesting pivot( ) ..." << std::endl;
+
+    ULDataFrame df;
+
+    df.load_data(
+        std::vector<unsigned long>{ 1, 2, 3, 4, 5, 6, 7 },
+        std::make_pair("day",
+                       std::vector<std::string>{ "Monday", "Tuesday",
+                                                 "Wednesday", "Thursday",
+                                                 "Friday", "Saturday", "Sunday"
+                                }),
+        std::make_pair("Chicago",
+                       std::vector<double>{ 32, 30, 28, 22, 30, 20, 25 }),
+        std::make_pair("Tehran",
+                       std::vector<double>{ 75, 77, 75, 82, 83, 81, 77 }),
+        std::make_pair("Berlin",
+                       std::vector<double>{ 41, 43, 45, 38, 30, 45, 47 }),
+        std::make_pair("Str Column",
+                       std::vector<std::string>{ "AA", "BB", "CC", "DD", "EE",
+                                                 "FF", "GG" }));
+
+    df.write<std::ostream, std::string, double>(std::cout, io_format::csv2);
+    std::cout << "\n\n";
+
+    const auto  mdf1 =
+        df.unpivot<std::string, double>
+            ("day", { "Chicago", "Tehran", "Berlin" });
+
+    mdf1.write<std::ostream, std::string, double>(std::cout, io_format::csv2);
+    std::cout << "\n\n";
+
+    const auto  mdf2 = mdf1.pivot<double>("variable", { "values" });
+
+    mdf2.write<std::ostream, double>(std::cout, io_format::csv2);
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_sort_freq()  {
+
+    std::cout << "\nTesting sort_freq( ) ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    auto    fut =
+        ibm.sort_freq_async<double, double, long>("IBM_Close",
+                                                  sort_spec::desce);
+
+    fut.get();
+    assert((ibm.get_index()[0] == "2000-12-22" ||
+            ibm.get_index()[0] == "2003-10-20"));
+    assert((std::fabs(ibm.get_column<double>("IBM_Low")[0] - 88.86) < 0.01 ||
+            std::fabs(ibm.get_column<double>("IBM_Low")[0] - 84.5) < 0.01));
+    assert((std::fabs(ibm.get_column<double>("IBM_Close")[0] - 89.0) < 0.01));
+    assert((ibm.get_column<long>("IBM_Volume")[0] == 6971300 ||
+            ibm.get_column<long>("IBM_Volume")[0] == 9514000));
+
+    assert((ibm.get_index()[7] == "2002-04-19" ||
+            ibm.get_index()[7] == "2003-05-12"));
+    assert((std::fabs(ibm.get_column<double>("IBM_High")[7] - 90.03) < 0.01 ||
+            std::fabs(ibm.get_column<double>("IBM_High")[7] - 89.26) < 0.01));
+    assert((std::fabs(ibm.get_column<double>("IBM_Close")[7] - 89.0) < 0.01));
+    assert((ibm.get_column<long>("IBM_Volume")[7] == 9273200 ||
+            ibm.get_column<long>("IBM_Volume")[7] == 8445700));
+
+    assert((ibm.get_index()[55] == "2010-01-06" ||
+            ibm.get_index()[55] == "2009-12-23"));
+    assert((std::fabs(ibm.get_column<double>("IBM_High")[55] - 131.49) < 0.01 ||
+            std::fabs(ibm.get_column<double>("IBM_High")[55] - 130.0) < 0.01));
+    assert((std::fabs(ibm.get_column<double>("IBM_Close")[55] - 130.0) < 0.01));
+    assert((ibm.get_column<long>("IBM_Volume")[55] == 5605300 ||
+            ibm.get_column<long>("IBM_Volume")[55] == 4127600));
+
+    assert((ibm.get_index()[58] == "2008-07-22" ||
+            ibm.get_index()[58] == "2008-07-24"));
+    assert((std::fabs(ibm.get_column<double>("IBM_Open")[58] - 127.5) < 0.01 ||
+            std::fabs(ibm.get_column<double>("IBM_Open")[58] - 129.06) < 0.01));
+    assert((std::fabs(ibm.get_column<double>("IBM_Close")[58] - 130.0) < 0.01));
+    assert((ibm.get_column<long>("IBM_Volume")[58] == 11428600 ||
+            ibm.get_column<long>("IBM_Volume")[58] == 8946300));
+
+    assert((ibm.get_index()[4973] == "2002-09-05" ||
+            ibm.get_index()[4973] == ""));
+    assert(
+        (std::fabs(ibm.get_column<double>("IBM_Open")[4973] - 72.73) < 0.01));
+    assert(
+        (std::fabs(ibm.get_column<double>("IBM_Close")[4973] - 72.18) < 0.01));
+    assert((ibm.get_column<long>("IBM_Volume")[4973] == 6467700));
+
+    assert((ibm.get_index()[5030] == "2002-10-09"));
+    assert(
+        (std::fabs(ibm.get_column<double>("IBM_Open")[5030] - 56.05) < 0.01));
+    assert(
+        (std::fabs(ibm.get_column<double>("IBM_Close")[5030] - 55.07) < 0.01));
+    assert((ibm.get_column<long>("IBM_Volume")[5030] == 12156000));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_pretty_print()  {
+
+    std::cout << "\nTesting pretty_print ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    df.write<std::ostream, double, long>(
+         std::cout, io_format::pretty_prt,
+         { .precision = 2, .max_recs = 5, .dt_format = DT_FORMAT::ISO_DT });
+    std::cout << "\n\n\n";
+
+    DTDataFrame df2;
+
+    try  {
+        df2.read("AAPL_10dBucketWithMaps_small.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    df2.write<std::ostream,
+              double,
+              long,
+              std::map<std::string, double>,
+              std::unordered_map<std::string, double>,
+              std::vector<std::string>,
+              std::set<double>,
+              std::set<std::string>>
+        (std::cout, io_format::pretty_prt,
+         { .precision = 6, .dt_format = DT_FORMAT::ISO_DT });
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_markdown()  {
+
+    std::cout << "\nTesting markdown ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    df.write<std::ostream, double, long>(
+         std::cout, io_format::markdown,
+         { .precision = 2, .max_recs = 10, .dt_format = DT_FORMAT::AMR_DT });
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_latex()  {
+
+    std::cout << "\nTesting latex ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    df.write<std::ostream, double, long>(
+         std::cout, io_format::latex,
+         { .precision = 4, .max_recs = 5, .dt_format = DT_FORMAT::ISO_DT });
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_html()  {
+
+    std::cout << "\nTesting html ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    df.write<std::ostream, double, long>(
+         std::cout, io_format::html,
+         { .precision = 3, .max_recs = 5, .dt_format = DT_FORMAT::ISO_DT });
+    std::cout << "\n\n\n";
+
+    DTDataFrame df2;
+
+    try  {
+        df2.read("AAPL_10dBucketWithMaps_small.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    df2.write<std::ostream,
+              double,
+              long,
+              std::map<std::string, double>,
+              std::unordered_map<std::string, double>,
+              std::vector<std::string>,
+              std::set<double>,
+              std::set<std::string>>
+        (std::cout, io_format::html,
+         { .precision = 6, .dt_format = DT_FORMAT::ISO_DT_TM });
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_load_random_sample()  {
+
+    std::cout << "\nTesting load_random_sample( ) ..." << std::endl;
+
+    using iter_t = std::vector<std::string>::const_iterator;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const std::vector<std::string>  universe {
+        "AA", "BB", "CC", "DD", "EE", "FF", "GG", "HH", "II", "JJ", "KK",
+        "LL", "MM", "NN", "OO", "PP", "QQ", "RR", "SS", "TT", "UU", "VV",
+        "WW", "XX", "YY", "ZZ",
+    };
+
+    ibm.load_random_sample<std::string, iter_t>(
+        "Random Sample",
+        { universe.cbegin(), universe.cend() },
+        ibm.get_index().size(),
+        123);
+
+    const auto  &str_col = ibm.get_column<std::string>("Random Sample");
+
+    assert(str_col.size() == ibm.get_index().size());
+    assert(str_col[0] == "SS");
+    assert(str_col[5] == "RR");
+    assert(str_col[63] == "AA");
+    assert(str_col[94] == "ZZ");
+    assert(str_col[5011] == "ZZ");
+    assert(str_col[5030] == "CC");
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_resample()  {
+
+    std::cout << "\nTesting resample ..." << std::endl;
+
+    DTDataFrame df;
+
+    try  {
+        df.read("DT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    const auto  buckets1 =
+        df.resample(time_frequency::daily, 75,
+            LastVisitor<DTDataFrame::IndexType, MyDataFrame::IndexType>(),
+            std::make_tuple("IBM_Close", "High", MaxVisitor<double>()),
+            std::make_tuple("IBM_Close", "Low", MinVisitor<double>()),
+            std::make_tuple("IBM_Close", "Open", FirstVisitor<double>()),
+            std::make_tuple("IBM_Close", "Close", LastVisitor<double>()),
+            std::make_tuple("IBM_Close", "Mean", MeanVisitor<double>()),
+            std::make_tuple("IBM_Close", "Std", StdVisitor<double>()),
+            std::make_tuple("IBM_Volume", "Volume", SumVisitor<long>()),
+            std::make_tuple("IBM_Close", "Count", CountVisitor<double>()));
+
+    buckets1.write<std::ostream, double, long, std::size_t>(
+         std::cout, io_format::pretty_prt,
+         { .precision = 2, .dt_format = DT_FORMAT::ISO_DT });
+    std::cout << "\n\n\n";
+
+    const auto  buckets2 =
+        df.resample(time_frequency::weekly, 10,
+            LastVisitor<DTDataFrame::IndexType, MyDataFrame::IndexType>(),
+            std::make_tuple("IBM_Close", "High", MaxVisitor<double>()),
+            std::make_tuple("IBM_Close", "Low", MinVisitor<double>()),
+            std::make_tuple("IBM_Close", "Open", FirstVisitor<double>()),
+            std::make_tuple("IBM_Close", "Close", LastVisitor<double>()),
+            std::make_tuple("IBM_Close", "Mean", MeanVisitor<double>()),
+            std::make_tuple("IBM_Close", "Std", StdVisitor<double>()),
+            std::make_tuple("IBM_Volume", "Volume", SumVisitor<long>()),
+            std::make_tuple("IBM_Close", "Count", CountVisitor<double>()));
+
+    buckets2.write<std::ostream, double, long, std::size_t>(
+         std::cout, io_format::pretty_prt,
+         { .precision = 2, .dt_format = DT_FORMAT::ISO_DT });
+    std::cout << "\n\n\n";
+
+    const auto  buckets3 =
+        df.resample(time_frequency::monthly, 6,
+            LastVisitor<DTDataFrame::IndexType, MyDataFrame::IndexType>(),
+            std::make_tuple("IBM_Close", "High", MaxVisitor<double>()),
+            std::make_tuple("IBM_Close", "Low", MinVisitor<double>()),
+            std::make_tuple("IBM_Close", "Open", FirstVisitor<double>()),
+            std::make_tuple("IBM_Close", "Close", LastVisitor<double>()),
+            std::make_tuple("IBM_Close", "Mean", MeanVisitor<double>()),
+            std::make_tuple("IBM_Close", "Std", StdVisitor<double>()),
+            std::make_tuple("IBM_Volume", "Volume", SumVisitor<long>()),
+            std::make_tuple("IBM_Close", "Count", CountVisitor<double>()));
+
+    buckets3.write<std::ostream, double, long, std::size_t>(
+         std::cout, io_format::pretty_prt,
+         { .precision = 2, .dt_format = DT_FORMAT::ISO_DT });
+    std::cout << "\n\n\n";
+
+    auto        fut =
+        df.resample_async(time_frequency::annual, 2,
+            LastVisitor<DTDataFrame::IndexType, MyDataFrame::IndexType>(),
+            std::make_tuple("IBM_Close", "High", MaxVisitor<double>()),
+            std::make_tuple("IBM_Close", "Low", MinVisitor<double>()),
+            std::make_tuple("IBM_Close", "Open", FirstVisitor<double>()),
+            std::make_tuple("IBM_Close", "Close", LastVisitor<double>()),
+            std::make_tuple("IBM_Close", "Mean", MeanVisitor<double>()),
+            std::make_tuple("IBM_Close", "Std", StdVisitor<double>()),
+            std::make_tuple("IBM_Volume", "Volume", SumVisitor<long>()),
+            std::make_tuple("IBM_Close", "Count", CountVisitor<double>()));
+    const auto  buckets4 = fut.get();
+
+    buckets4.write<std::ostream, double, long, std::size_t>(
+         std::cout, io_format::pretty_prt,
+         { .precision = 2, .dt_format = DT_FORMAT::ISO_DT });
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_DivideToBinsVisitor()  {
+
+    std::cout << "\nTesting DivideToBinsVisitor{ } ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    cut_v<double, std::string>  cut {
+        4, { "Low Bin", "Mid Low Bin", "Mid High Bin", "High Bin" }
+    };
+
+    ibm.single_act_visit<double>("IBM_Close", cut);
+    ibm.load_column("String Labels", std::move(cut.get_labels()));
+    ibm.load_column("Edges", std::move(cut.get_result()));
+
+    // ibm.write<std::ostream,
+    //           double,
+    //           long,
+    //           std::string,
+    //           std::pair<double, double>>(
+    //      std::cout, io_format::pretty_prt, { .precision = 4 });
+
+    const auto  &close_col = ibm.get_column<double>("IBM_Close");
+    const auto  &lables_col = ibm.get_column<std::string>("String Labels");
+    const auto  &edges_col = ibm.get_column<std::pair<double, double>>("Edges");
+
+    assert((std::fabs(close_col[0] - 98.5625) < 0.0001));
+    assert((lables_col[0] == "Mid Low Bin"));
+    assert((edges_col[0] == std::pair<double, double>{ 95, 135 }));
+
+    assert((std::fabs(close_col[7] - 93.0) < 0.01));
+    assert((lables_col[7] == "Low Bin"));
+    assert((edges_col[7] == std::pair<double, double>{ 55, 95 }));
+
+    assert((std::fabs(close_col[463] - 74.2) < 0.1));
+    assert((lables_col[463] == "Low Bin"));
+    assert((edges_col[463] == std::pair<double, double>{ 55, 95 }));
+
+    assert((std::fabs(close_col[1570] - 100.38) < 0.01));
+    assert((lables_col[1570] == "Mid Low Bin"));
+    assert((edges_col[1570] == std::pair<double, double>{ 95, 135 }));
+
+    assert((std::fabs(close_col[2110] - 94.15) < 0.01));
+    assert((lables_col[2110] == "Low Bin"));
+    assert((edges_col[2110] == std::pair<double, double>{ 55, 95 }));
+
+    assert((std::fabs(close_col[2574] - 159.21) < 0.01));
+    assert((lables_col[2574] == "Mid High Bin"));
+    assert((edges_col[2574] == std::pair<double, double>{ 135, 175 }));
+
+    assert((std::fabs(close_col[4086] - 174.29) < 0.01));
+    assert((lables_col[4086] == "Mid High Bin"));
+    assert((edges_col[4086] == std::pair<double, double>{ 135, 175 }));
+
+    assert((std::fabs(close_col[4107] - 180.05) < 0.01));
+    assert((lables_col[4107] == "High Bin"));
+    assert((edges_col[4107] == std::pair<double, double>{ 175, 215 }));
+
+    assert((std::fabs(close_col[5030] - 111.66) < 0.01));
+    assert((lables_col[5030] == "Mid Low Bin"));
+    assert((edges_col[5030] == std::pair<double, double>{ 95, 135 }));
+
+    cut_v<double, std::string>  cut2 {
+        { 50, 120, 175, 300 },
+        { "Low Bin", "Mid Bin", "High Bin" }
+    };
+
+    ibm.single_act_visit<double>("IBM_Close", cut2);
+    ibm.load_column("String Labels 2", std::move(cut2.get_labels()));
+    ibm.load_column("Edges 2", std::move(cut2.get_result()));
+
+    const auto  &lables_col2 = ibm.get_column<std::string>("String Labels 2");
+    const auto  &edges_col2 =
+        ibm.get_column<std::pair<double, double>>("Edges 2");
+
+    assert((std::fabs(close_col[0] - 98.5625) < 0.0001));
+    assert((lables_col2[0] == "Low Bin"));
+    assert((edges_col2[0] == std::pair<double, double>{ 50, 120 }));
+
+    assert((std::fabs(close_col[7] - 93.0) < 0.01));
+    assert((lables_col2[7] == "Low Bin"));
+    assert((edges_col2[7] == std::pair<double, double>{ 50, 120 }));
+
+    assert((std::fabs(close_col[463] - 74.2) < 0.1));
+    assert((lables_col2[463] == "Low Bin"));
+    assert((edges_col2[463] == std::pair<double, double>{ 50, 120 }));
+
+    assert((std::fabs(close_col[1570] - 100.38) < 0.01));
+    assert((lables_col2[1570] == "Low Bin"));
+    assert((edges_col2[1570] == std::pair<double, double>{ 50, 120 }));
+
+    assert((std::fabs(close_col[2110] - 94.15) < 0.01));
+    assert((lables_col2[2110] == "Low Bin"));
+    assert((edges_col2[2110] == std::pair<double, double>{ 50, 120 }));
+
+    assert((std::fabs(close_col[2574] - 159.21) < 0.01));
+    assert((lables_col2[2574] == "Mid Bin"));
+    assert((edges_col2[2574] == std::pair<double, double>{ 120, 175 }));
+
+    assert((std::fabs(close_col[4086] - 174.29) < 0.01));
+    assert((lables_col2[4086] == "Mid Bin"));
+    assert((edges_col2[4086] == std::pair<double, double>{ 120, 175 }));
+
+    assert((std::fabs(close_col[4107] - 180.05) < 0.01));
+    assert((lables_col2[4107] == "High Bin"));
+    assert((edges_col2[4107] == std::pair<double, double>{ 175, 300 }));
+
+    assert((std::fabs(close_col[5030] - 111.66) < 0.01));
+    assert((lables_col2[5030] == "Low Bin"));
+    assert((edges_col2[5030] == std::pair<double, double>{ 50, 120 }));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_DivideToQuantilesVisitor()  {
+
+    std::cout << "\nTesting DivideToQuantilesVisitor{ } ..." << std::endl;
+
+    StrDataFrame    ibm;
+
+    try  {
+        ibm.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    qcut_v<double, std::string> qcut {
+        4, { "Low Bin", "Mid Low Bin", "Mid High Bin", "High Bin" }
+    };
+
+    ibm.single_act_visit<double>("IBM_Close", qcut);
+    ibm.load_column("String Labels", std::move(qcut.get_labels()));
+    ibm.load_column("Edges", std::move(qcut.get_result()));
+
+    // ibm.write<std::ostream,
+    //           double,
+    //           long,
+    //           std::string,
+    //           std::pair<double, double>>(
+    //      std::cout, io_format::pretty_prt, { .precision = 4 });
+
+    const auto  &close_col = ibm.get_column<double>("IBM_Close");
+    const auto  &lables_col = ibm.get_column<std::string>("String Labels");
+    const auto  &edges_col = ibm.get_column<std::pair<double, double>>("Edges");
+
+    assert((std::fabs(close_col[0] - 98.5625) < 0.0001));
+    assert((lables_col[0] == "Mid Low Bin"));
+    assert((edges_col[0] ==
+            std::pair<double, double>{ 94.1899985, 126.470001 }));
+
+    assert((std::fabs(close_col[7] - 93.0) < 0.01));
+    assert((lables_col[7] == "Low Bin"));
+    assert((edges_col[7] == std::pair<double, double>{ 55.07, 94.1899985 }));
+
+    assert((std::fabs(close_col[463] - 74.2) < 0.1));
+    assert((lables_col[463] == "Low Bin"));
+    assert((edges_col[463] == std::pair<double, double>{ 55.07, 94.1899985 }));
+
+    assert((std::fabs(close_col[1570] - 100.38) < 0.01));
+    assert((lables_col[1570] == "Mid Low Bin"));
+    assert((edges_col[1570] ==
+            std::pair<double, double>{ 94.1899985, 126.470001 }));
+
+    assert((std::fabs(close_col[2110] - 94.15) < 0.01));
+    assert((lables_col[2110] == "Low Bin"));
+    assert((edges_col[2110] == std::pair<double, double>{ 55.07, 94.1899985 }));
+
+    assert((std::fabs(close_col[2574] - 159.21) < 0.01));
+    assert((lables_col[2574] == "Mid High Bin"));
+    assert((edges_col[2574] ==
+            std::pair<double, double>{ 126.470001, 159.529999 }));
+
+    assert((std::fabs(close_col[4086] - 174.29) < 0.01));
+    assert((lables_col[4086] == "High Bin"));
+    assert((edges_col[4086] ==
+            std::pair<double, double>{ 159.529999, 215.800003 }));
+
+    assert((std::fabs(close_col[4107] - 180.05) < 0.01));
+    assert((lables_col[4107] == "High Bin"));
+    assert((edges_col[4107] ==
+            std::pair<double, double>{ 159.529999, 215.800003 }));
+
+    assert((std::fabs(close_col[5030] - 111.66) < 0.01));
+    assert((lables_col[5030] == "Mid Low Bin"));
+    assert((edges_col[5030] ==
+            std::pair<double, double>{ 94.1899985, 126.470001 }));
+
+    qcut_v<double, std::string> qcut2 {
+        { 0, 0.66, 1 },
+        { "Low Bin", "High Bin" }
+    };
+
+    ibm.single_act_visit<double>("IBM_Close", qcut2);
+    ibm.load_column("String Labels 2", std::move(qcut2.get_labels()));
+    ibm.load_column("Edges 2", std::move(qcut2.get_result()));
+
+    const auto  &lables_col2 = ibm.get_column<std::string>("String Labels 2");
+    const auto  &edges_col2 =
+        ibm.get_column<std::pair<double, double>>("Edges 2");
+
+    assert((std::fabs(close_col[0] - 98.5625) < 0.0001));
+    assert((lables_col2[0] == "Low Bin"));
+    assert((edges_col2[0] == std::pair<double, double>{ 55.07, 146.589996 }));
+
+    assert((std::fabs(close_col[7] - 93.0) < 0.01));
+    assert((lables_col2[7] == "Low Bin"));
+    assert((edges_col2[7] == std::pair<double, double>{ 55.07, 146.589996 }));
+
+    assert((std::fabs(close_col[463] - 74.2) < 0.1));
+    assert((lables_col2[463] == "Low Bin"));
+    assert((edges_col2[463] == std::pair<double, double>{ 55.07, 146.589996 }));
+
+    assert((std::fabs(close_col[1570] - 100.38) < 0.01));
+    assert((lables_col2[1570] == "Low Bin"));
+    assert((edges_col2[1570] ==
+            std::pair<double, double>{ 55.07, 146.589996 }));
+
+    assert((std::fabs(close_col[2110] - 94.15) < 0.01));
+    assert((lables_col2[2110] == "Low Bin"));
+    assert((edges_col2[2110] ==
+            std::pair<double, double>{ 55.07, 146.589996 }));
+
+    assert((std::fabs(close_col[2574] - 159.21) < 0.01));
+    assert((lables_col2[2574] == "High Bin"));
+    assert((edges_col2[2574] ==
+            std::pair<double, double>{ 146.589996, 215.800003 }));
+
+    assert((std::fabs(close_col[4086] - 174.29) < 0.01));
+    assert((lables_col2[4086] == "High Bin"));
+    assert((edges_col2[4086] ==
+            std::pair<double, double>{ 146.589996, 215.800003 }));
+
+    assert((std::fabs(close_col[4107] - 180.05) < 0.01));
+    assert((lables_col2[4107] == "High Bin"));
+    assert((edges_col2[4107] ==
+            std::pair<double, double>{ 146.589996, 215.800003 }));
+
+    assert((std::fabs(close_col[5030] - 111.66) < 0.01));
+    assert((lables_col2[5030] == "Low Bin"));
+    assert((edges_col2[5030] ==
+            std::pair<double, double>{ 55.07, 146.589996 }));
+}
+
+// ----------------------------------------------------------------------------
+
+static DTDataFrame &
+read_df(DTDataFrame &df)  {
+
+    try  {
+        df.read("DT_IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+    return (df);
+}
+
+// -------------------------------------
+
+static DTDataFrame &
+multiply_col(DTDataFrame &df, const std::string &col_name, double factor)  {
+
+    df.apply<double>(col_name.c_str(),
+                     [factor](const DateTime &, double &val) -> bool  {
+                         val *= factor;
+                         return (true);
+                     });
+    return (df);
+}
+
+// -------------------------------------
+
+static DTDataFrame &
+add_col(DTDataFrame &dt_df, const StrDataFrame2 &str_df)  {
+
+    const auto  &volume = str_df.get_column<long>("IBM_Volume");
+
+    dt_df.load_column("IBM_Volume 2", volume);
+    return (dt_df);
+}
+
+// -------------------------------------
+
+static auto verify =
+    [](DTDataFrame &df) -> DTDataFrame &  {
+        const auto  &volume1 = df.get_column<long>("IBM_Volume");
+        const auto  &volume2 = df.get_column<long>("IBM_Volume 2");
+        const auto  &open = df.get_column<double>("IBM_Open");
+
+        assert(volume1.size() == 5031);
+        assert(volume1.size() == volume2.size());
+        assert(volume1[500] == volume2[500]);
+        assert(open.size() == 5031);
+        assert((std::fabs(open[5003] - 241.6) < 0.01));
+        return (df);
+    };
+
+// -------------------------------------
+
+struct  PrintDF  {
+
+    PrintDF(long row_count) : row_count_(row_count)  {   }
+
+    DTDataFrame &operator()(DTDataFrame &df)  {
+
+        df.write<std::ostream, double, long>
+            (std::cout, io_format::pretty_prt,
+             { .precision = 2, .max_recs = row_count_ });
+        return(df);
+    }
+
+private:
+
+    const long  row_count_;
+};
+
+// -------------------------------------
+
+static void test_pipe()  {
+
+    std::cout << "\nTesting pipe(  ) ..." << std::endl;
+
+    StrDataFrame2   str_df;
+
+    try  {
+        str_df.read("IBM.csv", io_format::csv2);
+    }
+    catch (const DataFrameError &ex)  {
+        std::cout << ex.what() << std::endl;
+        ::exit(-1);
+    }
+
+    DTDataFrame dt_df;
+    PrintDF     printer(5L);
+
+    dt_df.pipe(read_df)
+        .pipe(multiply_col, "IBM_Open", 2.0)
+        .pipe(add_col, str_df)
+        .pipe(verify)
+        .pipe(std::bind(&PrintDF::operator(), printer, std::placeholders::_1));
+}
+
+// ----------------------------------------------------------------------------
+
+static void test_fl_valid_index()  {
+
+    std::cout << "\nTesting fl_valid_index( ) ..." << std::endl;
+
+    const double               nval = std::numeric_limits<double>::quiet_NaN();
+    MyDataFrame                df;
+    StlVecType<unsigned long>  idxvec =
+        { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+    StlVecType<double>         dblvec =
+        { 0, 15, -14, 2, 1, 12, 11, 8, 7, 6, 5, 4, 3, 9, 10};
+    StlVecType<double>         dblvec2 =
+        { 100, 101, nval, 103, 104, 103.9, 106.55, 106.34, 1.8, nval, 112,
+          111.5, 114, nval, nval};
+    StlVecType<double>         dblempty { };
+    StlVecType<double>         allnan =
+        { nval, nval, nval, nval, nval, nval, nval, nval, nval, nval, nval,
+          nval, nval, nval, nval};
+    StlVecType<std::string>    strvec =
+        { "", "bb", "cc", "ww", "", "ff", "gg", "hh", "ii", "jj", "kk",
+          "ll", "mm", "nn", "" };
+
+    df.load_data(std::move(idxvec),
+                 std::make_pair("dbl_col", dblvec),
+                 std::make_pair("dbl_col_2", dblvec2),
+                 std::make_pair("Empty Col", dblempty),
+                 std::make_pair("All NaN Col", allnan),
+                 std::make_pair("str_col", strvec));
+
+    const auto  res1 = df.fl_valid_index<double>("dbl_col");
+
+    assert(res1.first == 0);
+    assert(res1.second == 14);
+
+    const auto  res2 = df.fl_valid_index<double>("dbl_col_2");
+
+    assert(res2.first == 0);
+    assert(res2.second == 12);
+
+    const auto  res3 = df.fl_valid_index<double>("Empty Col");
+
+    assert(res3.first == 0);
+    assert(res3.second == 0);
+
+    const auto  res4 = df.fl_valid_index<double>("All NaN Col");
+
+    assert(res4.first == 0);
+    assert(res4.second == 0);
+
+    const auto  res5 = df.fl_valid_index<std::string>("str_col");
+
+    assert(res5.first == 1);
+    assert(res5.second == 13);
+}
+
+// ----------------------------------------------------------------------------
+
+int main(int, char *[]) {
+
+    MyDataFrame::set_optimum_thread_level();
+
+    test_starts_with();
+    test_ends_with();
+    test_in_between();
+    test_peaks();
+    test_valleys();
+    test_apply();
+    test_truncate();
+    test_load_column();
+    test_explode();
+    test_read_write_pairs();
+    test_difference();
+    test_get_data_at_times();
+    test_get_data_before_times();
+    test_get_data_after_times();
+    test_get_data_on_days();
+    test_get_data_in_months();
+    test_get_data_on_days_in_month();
+    test_get_data_between_times();
+    test_remove_top_n_data();
+    test_remove_bottom_n_data();
+    test_remove_above_quantile_data();
+    test_remove_below_quantile_data();
+    test_remove_data_by_stdev();
+    test_get_data_by_stdev();
+    test_get_data_by_kmeans();
+    // test_get_data_by_affin();
+    test_remove_data_by_hampel();
+    test_DBSCANVisitor();
+    test_MeanShiftVisitor();
+    test_get_data_by_dbscan();
+    test_get_data_by_mshift();
+    test_view_assign();
+    test_CrossCorrVisitor();
+    test_PartialAutoCorrVisitor();
+    test_make_stationary();
+    test_StationaryCheckVisitor();
+    test_covariance_matrix();
+    test_pca_by_eigen();
+    test_compact_svd();
+    test_SpectralClusteringVisitor();
+    test_get_data_by_spectral();
+    test_canon_corr();
+    test_MC_station_dist();
+    test_SeasonalPeriodVisitor();
+    test_read_data_file_with_schema();
+    test_knn();
+    test_DynamicTimeWarpVisitor();
+    test_AnomalyDetectByFFTVisitor();
+    test_remove_data_by_fft();
+    test_AnomalyDetectByIQRVisitor();
+    test_AnomalyDetectByZScoreVisitor();
+    test_remove_data_by_iqr();
+    test_remove_data_by_zscore();
+    test_AnomalyDetectByLOFVisitor();
+    test_detect_and_change();
+    test_KolmoSmirnovTestVisitor();
+    test_MannWhitneyUTestVisitor();
+    test_mask();
+    test_fast_ica();
+    test_DateTime_write();
+    test_read_selected_cols_from_file();
+    test_MutualInfoVisitor();
+    test_io_format_csv2_with_bars();
+    test_AndersonDarlingTestVisitor();
+    test_ShapiroWilkTestVisitor();
+    test_CramerVonMisesTestVisitor();
+    test_unpivot();
+    test_pivot();
+    test_sort_freq();
+    test_pretty_print();
+    test_markdown();
+    test_latex();
+    test_html();
+    test_load_random_sample();
+    test_resample();
+    test_DivideToBinsVisitor();
+    test_DivideToQuantilesVisitor();
+    test_pipe();
+    test_fl_valid_index();
+
+    return (0);
+}
+
+// ----------------------------------------------------------------------------
+
+// Local Variables:
+// mode:C++
+// tab-width:4
+// c-basic-offset:4
+// End:

@@ -1,7 +1,7 @@
 // Hossein Moein
 // September 12, 2017
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -27,20 +27,16 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <DataFrame/DataFrame.h>
+#include <DataFrame/DataFrameMLVisitors.h>
 
-#include <algorithm>
-#include <cmath>
-#include <functional>
-#include <future>
-#include <random>
+#include <DataFrame/DataFrame.h>
 
 // ----------------------------------------------------------------------------
 
 namespace hmdf
 {
 
-// Notice memeber variables are initialized twice, but that's cheap
+// Notice member variables are initialized twice, but that's cheap
 //
 template<typename I, typename H>
 DataFrame<I, H>::DataFrame(const DataFrame &that)  { *this = that; }
@@ -55,14 +51,108 @@ DataFrame<I, H> &
 DataFrame<I, H>::operator= (const DataFrame &that)  {
 
     if (this != &that)  {
+        const SpinGuard guard { lock_ };
+
         indices_ = that.indices_;
         column_tb_ = that.column_tb_;
         column_list_ = that.column_list_;
-
-        const SpinGuard guard(lock_);
-
         data_ = that.data_;
     }
+    return (*this);
+}
+
+// ----------------------------------------------------------------------------
+template<typename I, typename H>
+template<typename OTHER, typename ... Ts>
+DataFrame<I, H> &
+DataFrame<I, H>::assign(OTHER &rhs)  {
+
+    const SpinGuard guard { lock_ };
+
+    indices_.clear();
+    indices_.reserve(rhs.indices_.size());
+    if constexpr (std::is_base_of<HeteroView<align_value>, H>::value)  {
+        indices_.set_begin_end_special(&(rhs.indices_.front()),
+                                       &(rhs.indices_.back()));
+    }
+    else if constexpr (std::is_base_of<HeteroPtrView<align_value>, H>::value) {
+        for (auto &val : rhs.indices_)
+            indices_.push_back(&val);
+    }
+    else  {
+        for (const auto &val : rhs.indices_)  indices_.push_back(val);
+    }
+
+    column_tb_.clear();
+    column_list_.clear();
+
+    data_.clear();
+    if constexpr (std::is_base_of<HeteroView<align_value>, H>::value ||
+                  std::is_base_of<HeteroPtrView<align_value>, H>::value)  {
+        for (const auto &[name, idx] : rhs.column_list_) [[likely]]  {
+            view_setup_functor_<DataFrame, Ts ...>   functor(
+                name.c_str(), 0, indices_.size(), *this);
+
+            rhs.data_[idx].change(functor);
+        }
+    }
+    else  {
+        for (const auto &[rhs_name, rhs_idx] : rhs.column_list_)  {
+            load_all_functor_<DataFrame, Ts ...> functor(
+                rhs_name.c_str(), *this);
+
+            rhs.data_[rhs_idx].change(functor);
+        }
+    }
+
+    return (*this);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename OTHER, typename ... Ts>
+DataFrame<I, H> &
+DataFrame<I, H>::assign(const OTHER &rhs)  {
+
+    const SpinGuard guard { lock_ };
+
+    indices_.clear();
+    indices_.reserve(rhs.indices_.size());
+    if constexpr (std::is_base_of<HeteroView<align_value>, H>::value)  {
+        indices_.set_begin_end_special(&(rhs.indices_.front()),
+                                       &(rhs.indices_.back()));
+    }
+    else if constexpr (std::is_base_of<HeteroPtrView<align_value>, H>::value) {
+        for (auto &val : rhs.indices_)
+            indices_.push_back(&val);
+    }
+    else  {
+        for (const auto &val : rhs.indices_)  indices_.push_back(val);
+    }
+
+    column_tb_.clear();
+    column_list_.clear();
+
+    data_.clear();
+    if constexpr (std::is_base_of<HeteroView<align_value>, H>::value ||
+                  std::is_base_of<HeteroPtrView<align_value>, H>::value)  {
+        for (const auto &[name, idx] : rhs.column_list_) [[likely]]  {
+            view_setup_functor_<DataFrame, Ts ...>   functor(
+                name.c_str(), 0, indices_.size(), *this);
+
+            rhs.data_[idx].change(functor);
+        }
+    }
+    else  {
+        for (const auto &[rhs_name, rhs_idx] : rhs.column_list_)  {
+            load_all_functor_<DataFrame, Ts ...> functor(
+                rhs_name.c_str(), *this);
+
+            rhs.data_[rhs_idx].change(functor);
+        }
+    }
+
     return (*this);
 }
 
@@ -73,12 +163,11 @@ DataFrame<I, H> &
 DataFrame<I, H>::operator= (DataFrame &&that)  {
 
     if (this != &that)  {
+        const SpinGuard guard(lock_);
+
         indices_ = std::exchange(that.indices_, IndexVecType { });
         column_tb_ = std::exchange(that.column_tb_, ColNameDict { });
         column_list_ = std::exchange(that.column_list_, ColNameList { });
-
-        const SpinGuard guard(lock_);
-
         data_ = std::exchange(that.data_, DataVecVec { });
     }
     return (*this);
@@ -113,64 +202,48 @@ void DataFrame<I, H>::set_lock (SpinLock *sl)  { lock_ = sl; }
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-void DataFrame<I, H>::remove_lock ()  { lock_ = nullptr; }
+SpinLock *DataFrame<I, H>::get_lock ()  { return (lock_); }
 
 // ----------------------------------------------------------------------------
 
-
 template<typename I, typename H>
-template<typename CF, typename ... Ts>
-void DataFrame<I, H>::sort_common_(DataFrame<I, H> &df, CF &&comp_func)  {
-
-    const size_type         idx_s = df.indices_.size();
-    std::vector<size_type>  sorting_idxs(idx_s, 0);
-
-    std::iota(sorting_idxs.begin(), sorting_idxs.end(), 0);
-    std::sort(sorting_idxs.begin(), sorting_idxs.end(), comp_func);
-
-    {
-        sort_functor_<Ts ...>   functor (sorting_idxs, idx_s);
-        const SpinGuard         guard(lock_);
-
-        for (auto &iter : df.data_)
-            iter.change(functor);
-    }
-    _sort_by_sorted_index_(df.indices_, sorting_idxs, idx_s);
-}
+void DataFrame<I, H>::remove_lock ()  { lock_ = nullptr; }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
 template<typename ... Ts>
-void
-DataFrame<I, H>::shuffle(const std::vector<const char *> &col_names,
-                         bool also_shuffle_index)  {
+void DataFrame<I, H>::
+shuffle(const StlVecType<const char *> &col_names,
+        bool also_shuffle_index,
+        seed_t seed)  {
 
-    if (also_shuffle_index)  {
-        std::random_device  rd;
-        std::mt19937        g(rd());
+    std::random_device  rd;
+    std::mt19937        g { (seed != seed_t(-1)) ? seed : rd() };
 
+    if (also_shuffle_index)
         std::shuffle(indices_.begin(), indices_.end(), g);
-    }
 
-    shuffle_functor_<Ts ...>    functor;
+    shuffle_functor_<Ts ...>    functor { g };
+    auto                        lbd =
+        [&functor, this](const auto &name_citer) -> void  {
+            const auto  citer { column_tb_.find(name_citer) };
 
-    for (auto name_citer : col_names)  {
-        const auto  citer = column_tb_.find (name_citer);
+            if (citer == this->column_tb_.end()) [[unlikely]]  {
+                char buffer [512];
 
-        if (citer == column_tb_.end())  {
-            char buffer [512];
+                snprintf(buffer, sizeof(buffer) - 1,
+                        "DataFrame::shuffle(): ERROR: Cannot find column '%s'",
+                         name_citer);
+                throw ColNotFound(buffer);
+            }
 
-            sprintf(buffer,
-                    "DataFrame::shuffle(): ERROR: Cannot find column '%s'",
-                    name_citer);
-            throw ColNotFound(buffer);
-        }
+            data_[citer->second].change(functor);
+        };
+    const SpinGuard             guard { lock_ };
 
-        const SpinGuard guard(lock_);
-
-        data_[citer->second].change(functor);
-    }
+    for (const auto &name_citer : col_names) [[likely]]
+        lbd(name_citer);
 }
 
 // ----------------------------------------------------------------------------
@@ -178,312 +251,94 @@ DataFrame<I, H>::shuffle(const std::vector<const char *> &col_names,
 template<typename I, typename H>
 template<typename T>
 void DataFrame<I, H>::
-fill_missing_value_(ColumnVecType<T> &vec,
-                    const T &value,
-                    int limit,
-                    size_type col_num)  {
-
-    const size_type vec_size = vec.size();
-    int             count = 0;
-
-    if (limit < 0)
-        vec.reserve(col_num);
-    for (size_type i = 0; i < col_num; ++i)  {
-        if (limit >= 0 && count >= limit)  break;
-        if (i >= vec_size)  {
-            vec.push_back(value);
-            count += 1;
-        }
-        else if (is_nan<T>(vec[i]))  {
-            vec[i] = value;
-            count += 1;
-        }
-    }
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T>
-void DataFrame<I, H>::
-fill_missing_ffill_(ColumnVecType<T> &vec, int limit, size_type col_num)  {
-
-    const size_type vec_size = vec.size();
-
-    if (vec_size == 0)  return;
-
-    int count = 0;
-    T   last_value = vec[0];
-
-    for (size_type i = 1; i < col_num; ++i)  {
-        if (limit >= 0 && count >= limit)  break;
-        if (i >= vec_size)  {
-            if (! is_nan(last_value))  {
-                vec.reserve(col_num);
-                vec.push_back(last_value);
-                count += 1;
-            }
-            else  break;
-        }
-        else  {
-            if (! is_nan<T>(vec[i]))
-                last_value = vec[i];
-            else if (! is_nan<T>(last_value))  {
-                vec[i] = last_value;
-                count += 1;
-            }
-        }
-    }
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T,
-         typename std::enable_if<! std::is_arithmetic<T>::value ||
-                                 ! std::is_arithmetic<I>::value>::type*>
-void DataFrame<I, H>::
-fill_missing_midpoint_(ColumnVecType<T> &, int, size_type)  {
-
-    throw NotFeasible("fill_missing_midpoint_(): ERROR: Mid-point filling is "
-                      "not feasible on non-arithmetic types");
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T,
-         typename std::enable_if<std::is_arithmetic<T>::value &&
-                                 std::is_arithmetic<I>::value>::type*>
-void DataFrame<I, H>::
-fill_missing_midpoint_(ColumnVecType<T> &vec, int limit, size_type)  {
-
-    const size_type vec_size = vec.size();
-
-    if (vec_size < 3)  return;
-
-    int count = 0;
-    T   last_value = vec[0];
-
-    for (size_type i = 1; i < vec_size - 1; ++i)  {
-        if (limit >= 0 && count >= limit)  break;
-
-        if (! is_nan<T>(vec[i]))
-            last_value = vec[i];
-        else if (! is_nan<T>(last_value))  {
-            for (size_type j = i + 1; j < vec_size; ++j)  {
-                if (! is_nan<T>(vec[j]))  {
-                    vec[i] = (last_value + vec[j]) / T(2);
-                    last_value = vec[i];
-                    count += 1;
-                    break;
-                }
-            }
-        }
-    }
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T>
-void DataFrame<I, H>::
-fill_missing_bfill_(ColumnVecType<T> &vec, int limit)  {
-
-    const long  vec_size = static_cast<long>(vec.size());
-
-    if (vec_size == 0)  return;
-
-    int count = 0;
-    T   last_value = vec[vec_size - 1];
-
-    for (long i = vec_size - 1; i >= 0; --i)  {
-        if (limit >= 0 && count >= limit)  break;
-        if (! is_nan<T>(vec[i]))  last_value = vec[i];
-        if (is_nan<T>(vec[i]) && ! is_nan<T>(last_value))  {
-            vec[i] = last_value;
-            count += 1;
-        }
-    }
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T,
-         typename std::enable_if<! std::is_arithmetic<T>::value ||
-                                 ! std::is_arithmetic<I>::value>::type*>
-void DataFrame<I, H>::
-fill_missing_linter_(ColumnVecType<T> &, const IndexVecType &, int)  {
-
-    throw NotFeasible("fill_missing_linter_(): ERROR: Interpolation is "
-                      "not feasible on non-arithmetic types");
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T,
-         typename std::enable_if<std::is_arithmetic<T>::value &&
-                                 std::is_arithmetic<I>::value>::type*>
-void DataFrame<I, H>::
-fill_missing_linter_(ColumnVecType<T> &vec,
-                     const IndexVecType &index,
-                     int limit)  {
-
-    const long  vec_size = static_cast<long>(vec.size());
-
-    if (vec_size < 3)  return;
-
-    int             count = 0;
-    T               *y1 = &(vec[0]);
-    T               *y2 = &(vec[2]);
-    const IndexType *x = &(index[1]);
-    const IndexType *x1 = &(index[0]);
-    const IndexType *x2 = &(index[2]);
-
-    for (long i = 1; i < vec_size - 1; ++i)  {
-        if (limit >= 0 && count >= limit)  break;
-        if (is_nan<T>(vec[i]))  {
-            if (is_nan<T>(*y2))  {
-                bool    found = false;
-
-                for (long j = i + 1; j < vec_size; ++j)  {
-                    if (! is_nan(vec[j]))  {
-                        y2 = &(vec[j]);
-                        x2 = &(index[j]);
-                        found = true;
-                        break;
-                    }
-                }
-                if (! found)  break;
-            }
-            if (is_nan<T>(*y1))  {
-                for (long j = i - 1; j >= 0; --j)  {
-                    if (! is_nan(vec[j]))  {
-                        y1 = &(vec[j]);
-                        x1 = &(index[j]);
-                        break;
-                    }
-                }
-            }
-            vec[i] =
-                *y1 +
-                (static_cast<T>(*x - *x1) / static_cast<T>(*x2 - *x1)) *
-                (*y2 - *y1);
-            count += 1;
-        }
-        if (i < (vec_size - 2))  {
-            y1 = &(vec[i]);
-            y2 = &(vec[i + 2]);
-            x = &(index[i + 1]);
-            x1 = &(index[i]);
-            x2 = &(index[i + 2]);
-        }
-    }
-
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T>
-void DataFrame<I, H>::
-fill_missing(const std::vector<const char *> &col_names,
+fill_missing(const StlVecType<const char *> &col_names,
              fill_policy fp,
-             const std::vector<T> &values,
+             const StlVecType<T> &values,
              int limit)  {
 
-    const size_type                 count = col_names.size();
-    std::vector<std::future<void>>  futures(get_thread_level());
-    size_type                       thread_count = 0;
+    static_assert(std::is_base_of<HeteroVector<align_value>, H>::value,
+                  "Only a StdDataFrame can call fill_missing()");
 
-    for (size_type i = 0; i < count; ++i)  {
+    const size_type                 count { col_names.size() };
+    const size_type                 idx_s { indices_.size() };
+    const auto                      thread_level {
+        (idx_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level()
+    };
+    StlVecType<std::future<void>>   futures;
+
+    if (thread_level > 2)
+        futures.reserve(count);
+    for (size_type i { 0 }; i < count; ++i)  {
         ColumnVecType<T>    &vec = get_column<T>(col_names[i]);
 
-        if (fp == fill_policy::value)  {
-            if (thread_count >= get_thread_level())
-                fill_missing_value_(vec, values[i], limit, indices_.size());
-            else  {
-                futures[thread_count] =
-                    std::async(std::launch::async,
-                               &DataFrame::fill_missing_value_<T>,
-                               std::ref(vec),
-                               std::cref(values[i]),
-                               limit,
-                               indices_.size());
-                thread_count += 1;
+        if (thread_level <= 2)  {
+            if constexpr (supports_arithmetic<T>::value &&
+                          supports_arithmetic<IndexType>::value)  {
+                if (fp == fill_policy::linear_interpolate)
+                    fill_missing_linter_<T>(vec, indices_, limit);
+                else if (fp == fill_policy::lagrange_interpolate)
+                    fill_missing_lagrange_<T>(vec, indices_, limit);
             }
-        }
-        else if (fp == fill_policy::fill_forward)  {
-            if (thread_count >= get_thread_level())
-                fill_missing_ffill_<T>(vec, limit, indices_.size());
-            else  {
-                futures[thread_count] =
-                    std::async(std::launch::async,
-                               &DataFrame::fill_missing_ffill_<T>,
-                               std::ref(vec),
-                               limit,
-                               indices_.size());
-                thread_count += 1;
-            }
-        }
-        else if (fp == fill_policy::fill_backward)  {
-            if (thread_count >= get_thread_level())
+            if (fp == fill_policy::value)
+                fill_missing_value_(vec, values[i], limit, idx_s);
+            else if (fp == fill_policy::fill_forward)
+                fill_missing_ffill_<T>(vec, limit, idx_s);
+            else if (fp == fill_policy::fill_backward)
                 fill_missing_bfill_<T>(vec, limit);
-            else  {
-                futures[thread_count] =
-                    std::async(std::launch::async,
-                               &DataFrame::fill_missing_bfill_<T>,
-                               std::ref(vec),
-                               limit);
-                thread_count += 1;
-            }
+            else if (fp == fill_policy::mid_point)
+                fill_missing_midpoint_<T>(vec, limit, idx_s);
         }
-        else if (fp == fill_policy::linear_interpolate)  {
-            if (thread_count >= get_thread_level())
-                fill_missing_linter_<T>(vec, indices_, limit);
-            else  {
-                futures[thread_count] =
-                    std::async(std::launch::async,
-                               &DataFrame::fill_missing_linter_<T>,
-                               std::ref(vec),
-                               std::cref(indices_),
-                               limit);
-                thread_count += 1;
+        else  {
+            if constexpr (supports_arithmetic<T>::value &&
+                          supports_arithmetic<IndexType>::value)  {
+                if (fp == fill_policy::linear_interpolate)
+                    futures.emplace_back(
+                        thr_pool_.dispatch(false,
+                                           &DataFrame::fill_missing_linter_<T>,
+                                               std::ref(vec),
+                                               std::cref(indices_),
+                                               limit));
+                else if (fp == fill_policy::lagrange_interpolate)
+                    futures.emplace_back(
+                        thr_pool_.dispatch(
+                            false,
+                            &DataFrame::fill_missing_lagrange_<T>,
+                                std::ref(vec),
+                                std::cref(indices_),
+                                limit));
             }
-        }
-        else if (fp == fill_policy::mid_point)  {
-            if (thread_count >= get_thread_level())
-                fill_missing_midpoint_<T>(vec, limit, indices_.size());
-            else  {
-                futures[thread_count] =
-                    std::async(std::launch::async,
-                               &DataFrame::fill_missing_midpoint_<T>,
-                               std::ref(vec),
-                               limit,
-                               indices_.size());
-                thread_count += 1;
-            }
-        }
-        else if (fp == fill_policy::linear_extrapolate)  {
-            char buffer [512];
-
-            sprintf (
-                buffer,
-                "DataFrame::fill_missing(): fill_policy %d is not implemented",
-                static_cast<int>(fp));
-            throw NotImplemented(buffer);
+            if (fp == fill_policy::value)
+                futures.emplace_back(
+                    thr_pool_.dispatch(false,
+                                       &DataFrame::fill_missing_value_<T>,
+                                           std::ref(vec),
+                                           std::cref(values[i]),
+                                           limit,
+                                           idx_s));
+            else if (fp == fill_policy::fill_forward)
+                futures.emplace_back(
+                    thr_pool_.dispatch(false,
+                                       &DataFrame::fill_missing_ffill_<T>,
+                                           std::ref(vec),
+                                           limit,
+                                           idx_s));
+            else if (fp == fill_policy::fill_backward)
+                futures.emplace_back(
+                    thr_pool_.dispatch(false,
+                                       &DataFrame::fill_missing_bfill_<T>,
+                                           std::ref(vec),
+                                           limit));
+            else if (fp == fill_policy::mid_point)
+                futures.emplace_back(
+                    thr_pool_.dispatch(false,
+                                       &DataFrame::fill_missing_midpoint_<T>,
+                                           std::ref(vec),
+                                           limit,
+                                           idx_s));
         }
     }
+    for (auto &fut : futures)  fut.get();
 
-    for (size_type idx = 0; idx < thread_count; ++idx)
-        futures[idx].get();
     return;
 }
 
@@ -493,15 +348,17 @@ template<typename I, typename H>
 template<typename DF, typename ... Ts>
 void DataFrame<I, H>::fill_missing (const DF &rhs)  {
 
-    const auto  &self_idx = get_index();
-    const auto  &rhs_idx = rhs.get_index();
+    const auto      &self_idx = get_index();
+    const auto      &rhs_idx = rhs.get_index();
+    const SpinGuard guard(lock_);
 
-    for (auto col_citer : column_list_)  {
-        fill_missing_functor_<DF, Ts ...>   functor (
-            self_idx, rhs_idx, rhs, col_citer.first.c_str());
-        const SpinGuard                     guard(lock_);
+    for (const auto &[name, idx] : column_list_) [[likely]]  {
+        fill_missing_functor_<DF, Ts ...>   functor (self_idx,
+                                                     rhs_idx,
+                                                     rhs,
+                                                     name.c_str());
 
-        data_[col_citer.second].change(functor);
+        data_[idx].change(functor);
     }
 
     return;
@@ -510,34 +367,140 @@ void DataFrame<I, H>::fill_missing (const DF &rhs)  {
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T>
+template<arithmetic T>
 void DataFrame<I, H>::
-drop_missing_rows_(T &vec,
-                   const DropRowMap missing_row_map,
-                   drop_policy policy,
-                   size_type threshold,
-                   size_type col_num)  {
+detect_and_change(const StlVecType<const char *> &col_names,
+                  detect_method d_method,
+                  fill_policy f_policy,
+                  DetectAndChangeParams<T> params)  {
 
-    size_type   erase_count = 0;
+    const size_type                 count { col_names.size() };
+    // const auto                      thread_level =
+    //     (indices_.size() < ThreadPool::MUL_THR_THHOLD)
+    //         ? 0L : get_thread_level();
+    // StlVecType<std::future<void>>   futures;
 
-    for (auto &iter : missing_row_map)  {
-        if (policy == drop_policy::all)  {
-            if (iter.second == col_num)  {
-                vec.erase(vec.begin() + (iter.first - erase_count));
-                erase_count += 1;
+    for (size_type col = 0; col < count; ++col)  {
+        ColumnVecType<T>        &vec { get_column<T>(col_names[col]) };
+        StlVecType<size_type>   rows;
+
+        if (vec.empty()) [[unlikely]]  continue;
+
+        if (d_method == detect_method::fft)  {
+            using fftv_t = and_fft_v<T, I, std::size_t(H::align_value)>;
+
+            fftv_t  fft {
+                params.freq_num, params.threshold, params.norm_type
+            };
+
+            fft.pre();
+            fft(indices_.begin(), indices_.end(), vec.begin(), vec.end());
+            fft.post();
+            rows = std::move(fft.get_result());
+        }
+        else if (d_method == detect_method::iqr)  {
+            using iqrv_t = and_iqr_v<T, I, std::size_t(H::align_value)>;
+
+            iqrv_t  iqr { params.high_fence, params.low_fence };
+
+            iqr.pre();
+            iqr(indices_.begin(), indices_.end(), vec.begin(), vec.end());
+            iqr.post();
+            rows = std::move(iqr.get_result());
+        }
+        else if (d_method == detect_method::lof)  {
+            using lofv_t = and_lof_v<T, I, std::size_t(H::align_value)>;
+
+            lofv_t  lof { params.k, params.threshold,
+                          params.norm_type, params.dist_fun };
+
+            lof.pre();
+            lof(indices_.begin(), indices_.end(), vec.begin(), vec.end());
+            lof.post();
+            rows = std::move(lof.get_result());
+        }
+        else if (d_method == detect_method::hampel)  {
+            using hampel_t = hamf_v<T, I, std::size_t(H::align_value)>;
+
+            hampel_t    hampel { params.window_size, params.htype,
+                                 params.num_stdev };
+
+            hampel.pre();
+            hampel(indices_.begin(), indices_.end(), vec.begin(), vec.end());
+            hampel.post();
+            rows = std::move(hampel.get_result());
+        }
+        else if (d_method == detect_method::zscore)  {
+            using zscorev_t = and_zscr_v<T, I, std::size_t(H::align_value)>;
+
+            zscorev_t   zscore { params.threshold };
+
+            zscore.pre();
+            zscore(indices_.begin(), indices_.end(), vec.begin(), vec.end());
+            zscore.post();
+            rows = std::move(zscore.get_result());
+        }
+        else  {
+            throw NotImplemented("detect_and_change(): "
+                                 "Detection method is not implemented");
+        }
+
+        if (rows.empty()) [[unlikely]]  continue;
+
+        const size_type col_s { vec.size() };
+        const size_type row_s { rows.size() };
+        bool            processed { false };
+
+        if constexpr (supports_arithmetic<IndexType>::value)  {
+            if (f_policy == fill_policy::linear_interpolate)  {
+                for (size_type i { 0 }; i < row_s; ++i)  {
+                    const auto  row_idx { rows[i] };
+
+                    if ((row_idx < (col_s - 1)) && (row_idx > 0))  {
+                        const auto  &x1 { indices_[row_idx - 1] };
+                        const auto  &x { indices_[row_idx] };
+                        const auto  &x2 { indices_[row_idx + 1] };
+                        const auto  &y1 { vec[row_idx - 1] };
+                        const auto  &y2 { vec[row_idx + 1] };
+
+                        vec[row_idx] =
+                            y1 + (T(x - x1) / T(x2 - x1)) * (y2 - y1);
+                    }
+                }
+                processed = true;
             }
         }
-        else if (policy == drop_policy::any)  {
-            if (iter.second > 0)  {
-                vec.erase(vec.begin() + (iter.first - erase_count));
-                erase_count += 1;
+        if (f_policy == fill_policy::fill_forward)  {
+            for (size_type i { 0 }; i < row_s; ++i)  {
+                const auto  row_idx { rows[i] };
+
+                if (row_idx > 0)
+                    vec[row_idx] = vec[row_idx - 1];
             }
+            processed = true;
         }
-        else if (policy == drop_policy::threshold)  {
-            if (iter.second > threshold)  {
-                vec.erase(vec.begin() + (iter.first - erase_count));
-                erase_count += 1;
+        else if (f_policy == fill_policy::fill_backward)  {
+            for (size_type i { 0 }; i < row_s; ++i)  {
+                const auto  row_idx { rows[i] };
+
+                if (row_idx < (col_s - 1))
+                    vec[row_idx] = vec[row_idx + 1];
             }
+            processed = true;
+        }
+        else if (f_policy == fill_policy::mid_point)  {
+            for (size_type i { 0 }; i < row_s; ++i)  {
+                const auto  row_idx { rows[i] };
+
+                if ((row_idx < (col_s - 1)) && (row_idx > 0))
+                    vec[row_idx] =
+                        (vec[row_idx + 1] + vec[row_idx - 1]) * T(0.5);
+            }
+            processed = true;
+        }
+        else if (! processed)  {
+            throw NotImplemented("detect_and_change(): "
+                                 "Fill policy is not implemented");
         }
     }
 
@@ -551,46 +514,69 @@ template<typename ... Ts>
 void DataFrame<I, H>::
 drop_missing(drop_policy policy, size_type threshold)  {
 
-    DropRowMap      missing_row_map;
-    const size_type data_size = data_.size();
+    static_assert(std::is_base_of<HeteroVector<align_value>, H>::value,
+                  "Only a StdDataFrame can call drop_missing()");
 
-    map_missing_rows_functor_<Ts ...>   functor (
-        indices_.size(), missing_row_map);
+    DropRowMap                      missing_row_map;
+    const size_type                 num_cols { data_.size() };
+    const auto                      thread_level {
+        (indices_.size() < ThreadPool::MUL_THR_THHOLD)
+            ? 0L : get_thread_level()
+    };
+    std::vector<std::future<void>>  futures;
 
-    for (size_type idx = 0; idx < data_size; ++idx)  {
-        const SpinGuard guard(lock_);
+    if (thread_level > 2)  futures.reserve(num_cols + 1);
 
+    map_missing_rows_functor_<Ts ...>   functor {
+        indices_.size(), missing_row_map
+    };
+    const SpinGuard                     guard { lock_ };
+
+    for (size_type idx = 0; idx < num_cols; ++idx)
         data_[idx].change(functor);
-    }
 
-    drop_missing_rows_(indices_, missing_row_map, policy, threshold, data_size);
+    if (thread_level > 2)
+        futures.emplace_back(
+            thr_pool_.dispatch(
+                false,
+                &DataFrame::drop_missing_rows_<decltype(indices_)>,
+                     std::ref(indices_),
+                     std::cref(missing_row_map),
+                     policy,
+                     threshold,
+                     num_cols));
+    else
+        drop_missing_rows_(indices_,
+                           missing_row_map,
+                           policy,
+                           threshold,
+                           num_cols);
 
-    drop_missing_rows_functor_<Ts ...>  functor2 (
-        missing_row_map, policy, threshold, data_.size());
+    drop_missing_rows_functor_<Ts ...>  functor2 {
+        missing_row_map, policy, threshold, data_.size(), thread_level, futures
+    };
 
-    for (size_type idx = 0; idx < data_size; ++idx)  {
-        const SpinGuard guard(lock_);
-
+    for (size_type idx = 0; idx < num_cols; ++idx)
         data_[idx].change(functor2);
-    }
 
+    for (auto &fut : futures)  fut.get();
     return;
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T>
+template<hashable_equal T>
 typename DataFrame<I, H>::size_type DataFrame<I, H>::
 replace(const char *col_name,
-        const std::vector<T> &old_values,
-        const std::vector<T> &new_values,
-        int limit)  {
+        const StlVecType<T> &old_values,
+        const StlVecType<T> &new_values,
+        long limit)  {
 
     ColumnVecType<T>    &vec = get_column<T>(col_name);
     size_type           count = 0;
 
-    _replace_vector_vals_<ColumnVecType<T>, T>
+    replace_vector_vals_<ColumnVecType<T>, T>
         (vec, old_values, new_values, count, limit);
 
     return (count);
@@ -600,13 +586,13 @@ replace(const char *col_name,
 
 template<typename I, typename H>
 typename DataFrame<I, H>::size_type DataFrame<I, H>::
-replace_index(const std::vector<IndexType> &old_values,
-              const std::vector<IndexType> &new_values,
-              int limit)  {
+replace_index(const StlVecType<IndexType> &old_values,
+              const StlVecType<IndexType> &new_values,
+              long limit)  {
 
     size_type   count = 0;
 
-    _replace_vector_vals_<IndexVecType, IndexType>
+    replace_vector_vals_<IndexVecType, IndexType>
         (indices_, old_values, new_values, count, limit);
 
     return (count);
@@ -615,14 +601,14 @@ replace_index(const std::vector<IndexType> &old_values,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T, typename F>
+template<typename T, replace_callable<I, T> F>
 void DataFrame<I, H>::
 replace(const char *col_name, F &functor)  {
 
     ColumnVecType<T>    &vec = get_column<T>(col_name);
     const size_type     vec_s = vec.size();
 
-    for (size_type i = 0; i < vec_s; ++i)
+    for (size_type i = 0; i < vec_s; ++i) [[likely]]
         if (! functor(indices_[i], vec[i]))  break;
 
     return;
@@ -631,512 +617,90 @@ replace(const char *col_name, F &functor)  {
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T>
+template<hashable_equal T>
 std::future<typename DataFrame<I, H>::size_type> DataFrame<I, H>::
 replace_async(const char *col_name,
-              const std::vector<T> &old_values,
-              const std::vector<T> &new_values,
-              int limit)  {
+              const StlVecType<T> &old_values,
+              const StlVecType<T> &new_values,
+              long limit)  {
 
-    return (std::async(std::launch::async,
+    return (thr_pool_.dispatch(
+                       true,
                        &DataFrame::replace<T>,
                            this,
                            col_name,
-                           std::forward<const std::vector<T>>(old_values),
-                           std::forward<const std::vector<T>>(new_values),
+                           std::forward<const StlVecType<T>>(old_values),
+                           std::forward<const StlVecType<T>>(new_values),
                            limit));
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T, typename F>
+template<typename T, replace_callable<I, T> F>
 std::future<void> DataFrame<I, H>::
 replace_async(const char *col_name, F &functor)  {
 
-    return (std::async(std::launch::async,
-                       &DataFrame::replace<T, F>,
-                           this,
-                           col_name,
-                           std::ref(functor)));
+    return (thr_pool_.dispatch(true,
+                               &DataFrame::replace<T, F>,
+                                   this,
+                                   col_name,
+                                   std::ref(functor)));
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename ...Ts>
+template<typename ... Ts>
 void DataFrame<I, H>::make_consistent ()  {
 
-    static_assert(std::is_base_of<HeteroVector, H>::value,
+    static_assert(std::is_base_of<HeteroVector<align_value>, H>::value,
                   "Only a StdDataFrame can call make_consistent()");
 
-    const size_type             idx_s = indices_.size();
-    consistent_functor_<Ts ...> functor (idx_s);
+    consistent_functor_<Ts ...> functor (indices_.size());
     const SpinGuard             guard(lock_);
 
-    for (auto &iter : data_)
+    for (const auto &iter : data_) [[likely]]
         iter.change(functor);
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename ...Ts>
+template<typename ... Ts>
 void DataFrame<I, H>::shrink_to_fit ()  {
 
     indices_.shrink_to_fit();
 
     shrink_to_fit_functor_<Ts ...>  functor;
+    const auto                      thread_level =
+        (indices_.size() < ThreadPool::MUL_THR_THHOLD)
+            ? 0L : get_thread_level();
     const SpinGuard                 guard(lock_);
 
-    for (auto &iter : data_)
-        iter.change(functor);
-}
+    if (thread_level > 2)  {
+        auto    lbd =
+            [&functor](const auto &begin, const auto &end) -> void  {
+                for (auto citer = begin; citer < end; ++citer)
+                    citer->change(functor);
+            };
+        auto    futures =
+            thr_pool_.parallel_loop<double>(data_.begin(), data_.end(),
+                                            std::move(lbd));
 
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T, typename ...Ts>
-void DataFrame<I, H>::sort(const char *name, sort_spec dir)  {
-
-    make_consistent<Ts ...>();
-
-    if (! ::strcmp(name, DF_INDEX_COL_NAME))  {
-        auto    a = [this](size_type i, size_type j) -> bool  {
-                        return (this->indices_[i] < this->indices_[j]);
-                    };
-        auto    d = [this](size_type i, size_type j) -> bool  {
-                        return (this->indices_[i] > this->indices_[j]);
-                    };
-
-
-        if (dir == sort_spec::ascen)
-            sort_common_<decltype(a), Ts ...>(*this, std::move(a));
-        else
-            sort_common_<decltype(d), Ts ...>(*this, std::move(d));
+        for (auto &fut : futures)  fut.get();
     }
     else  {
-        const ColumnVecType<T>  &idx_vec = get_column<T>(name);
-
-        auto    a = [&x = idx_vec](size_type i, size_type j) -> bool {
-                        return (x[i] < x[j]);
-                    };
-        auto    d = [&x = idx_vec](size_type i, size_type j) -> bool {
-                        return (x[i] > x[j]);
-                    };
-
-        if (dir == sort_spec::ascen)
-            sort_common_<decltype(a), Ts ...>(*this, std::move(a));
-        else
-            sort_common_<decltype(d), Ts ...>(*this, std::move(d));
+        for (const auto &citer : data_) [[likely]]
+            citer.change(functor);
     }
-
-    return;
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T1, typename T2, typename ... Ts>
-void DataFrame<I, H>::
-sort(const char *name1, sort_spec dir1, const char *name2, sort_spec dir2)  {
-
-    make_consistent<Ts ...>();
-
-    ColumnVecType<T1>   *vec1 { nullptr};
-    ColumnVecType<T2>   *vec2 { nullptr};
-
-    if (! ::strcmp(name1, DF_INDEX_COL_NAME))
-        vec1 = reinterpret_cast<ColumnVecType<T1> *>(&indices_);
-    else
-        vec1 = &(get_column<T1>(name1));
-
-    if (! ::strcmp(name2, DF_INDEX_COL_NAME))
-        vec2 = reinterpret_cast<ColumnVecType<T2> *>(&indices_);
-    else
-        vec2 = &(get_column<T2>(name2));
-
-    auto    cf =
-        [vec1, vec2, dir1, dir2](size_type i, size_type j) -> bool {
-            if (dir1 == sort_spec::ascen)  {
-                if (vec1->at(i) < vec1->at(j))
-                    return (true);
-                else if (vec1->at(i) > vec1->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec1->at(i) > vec1->at(j))
-                    return (true);
-                else if (vec1->at(i) < vec1->at(j))
-                    return (false);
-            }
-            if (dir2 == sort_spec::ascen)
-                return (vec2->at(i) < vec2->at(j));
-            else
-                return (vec2->at(i) > vec2->at(j));
-        };
-
-    sort_common_<decltype(cf), Ts ...>(*this, std::move(cf));
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, typename T3, typename ... Ts>
-void DataFrame<I, H>::
-sort(const char *name1, sort_spec dir1,
-     const char *name2, sort_spec dir2,
-     const char *name3, sort_spec dir3)  {
-
-    make_consistent<Ts ...>();
-
-    ColumnVecType<T1>   *vec1 { nullptr};
-    ColumnVecType<T2>   *vec2 { nullptr};
-    ColumnVecType<T3>   *vec3 { nullptr};
-
-    if (! ::strcmp(name1, DF_INDEX_COL_NAME))
-        vec1 = reinterpret_cast<ColumnVecType<T1> *>(&indices_);
-    else
-        vec1 = &(get_column<T1>(name1));
-
-    if (! ::strcmp(name2, DF_INDEX_COL_NAME))
-        vec2 = reinterpret_cast<ColumnVecType<T2> *>(&indices_);
-    else
-        vec2 = &(get_column<T2>(name2));
-
-    if (! ::strcmp(name3, DF_INDEX_COL_NAME))
-        vec3 = reinterpret_cast<ColumnVecType<T3> *>(&indices_);
-    else
-        vec3 = &(get_column<T3>(name3));
-
-    auto    cf =
-        [vec1, vec2, vec3, dir1, dir2, dir3]
-        (size_type i, size_type j) -> bool {
-            if (dir1 == sort_spec::ascen)  {
-                if (vec1->at(i) < vec1->at(j))
-                    return (true);
-                else if (vec1->at(i) > vec1->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec1->at(i) > vec1->at(j))
-                    return (true);
-                else if (vec1->at(i) < vec1->at(j))
-                    return (false);
-            }
-            if (dir2 == sort_spec::ascen)  {
-                if (vec2->at(i) < vec2->at(j))
-                    return (true);
-                else if (vec2->at(i) > vec2->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec2->at(i) > vec2->at(j))
-                    return (true);
-                else if (vec2->at(i) < vec2->at(j))
-                    return (false);
-            }
-            if (dir3 == sort_spec::ascen)
-                return (vec3->at(i) < vec3->at(j));
-            else
-                return (vec3->at(i) > vec3->at(j));
-        };
-
-    sort_common_<decltype(cf), Ts ...>(*this, std::move(cf));
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, typename T3, typename T4, typename ... Ts>
-void DataFrame<I, H>::
-sort(const char *name1, sort_spec dir1,
-     const char *name2, sort_spec dir2,
-     const char *name3, sort_spec dir3,
-     const char *name4, sort_spec dir4)  {
-
-    make_consistent<Ts ...>();
-
-    ColumnVecType<T1>   *vec1 { nullptr};
-    ColumnVecType<T2>   *vec2 { nullptr};
-    ColumnVecType<T3>   *vec3 { nullptr};
-    ColumnVecType<T4>   *vec4 { nullptr};
-
-    if (! ::strcmp(name1, DF_INDEX_COL_NAME))
-        vec1 = reinterpret_cast<ColumnVecType<T1> *>(&indices_);
-    else
-        vec1 = &(get_column<T1>(name1));
-
-    if (! ::strcmp(name2, DF_INDEX_COL_NAME))
-        vec2 = reinterpret_cast<ColumnVecType<T2> *>(&indices_);
-    else
-        vec2 = &(get_column<T2>(name2));
-
-    if (! ::strcmp(name3, DF_INDEX_COL_NAME))
-        vec3 = reinterpret_cast<ColumnVecType<T3> *>(&indices_);
-    else
-        vec3 = &(get_column<T3>(name3));
-
-    if (! ::strcmp(name4, DF_INDEX_COL_NAME))
-        vec4 = reinterpret_cast<ColumnVecType<T4> *>(&indices_);
-    else
-        vec4 = &(get_column<T4>(name4));
-
-    auto    cf =
-        [vec1, vec2, vec3, vec4, dir1, dir2, dir3, dir4]
-        (size_type i, size_type j) -> bool {
-            if (dir1 == sort_spec::ascen)  {
-                if (vec1->at(i) < vec1->at(j))
-                    return (true);
-                else if (vec1->at(i) > vec1->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec1->at(i) > vec1->at(j))
-                    return (true);
-                else if (vec1->at(i) < vec1->at(j))
-                    return (false);
-            }
-            if (dir2 == sort_spec::ascen)  {
-                if (vec2->at(i) < vec2->at(j))
-                    return (true);
-                else if (vec2->at(i) > vec2->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec2->at(i) > vec2->at(j))
-                    return (true);
-                else if (vec2->at(i) < vec2->at(j))
-                    return (false);
-            }
-            if (dir3 == sort_spec::ascen)  {
-                if (vec3->at(i) < vec3->at(j))
-                    return (true);
-                else if (vec3->at(i) > vec3->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec3->at(i) > vec3->at(j))
-                    return (true);
-                else if (vec3->at(i) < vec3->at(j))
-                    return (false);
-            }
-            if (dir4 == sort_spec::ascen)
-                return (vec4->at(i) < vec4->at(j));
-            else
-                return (vec4->at(i) > vec4->at(j));
-        };
-
-    sort_common_<decltype(cf), Ts ...>(*this, std::move(cf));
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, typename T3, typename T4, typename T5,
-         typename ... Ts>
-void DataFrame<I, H>::
-sort(const char *name1, sort_spec dir1,
-     const char *name2, sort_spec dir2,
-     const char *name3, sort_spec dir3,
-     const char *name4, sort_spec dir4,
-     const char *name5, sort_spec dir5)  {
-
-    make_consistent<Ts ...>();
-
-    ColumnVecType<T1>   *vec1 { nullptr};
-    ColumnVecType<T2>   *vec2 { nullptr};
-    ColumnVecType<T3>   *vec3 { nullptr};
-    ColumnVecType<T4>   *vec4 { nullptr};
-    ColumnVecType<T5>   *vec5 { nullptr};
-
-    if (! ::strcmp(name1, DF_INDEX_COL_NAME))
-        vec1 = reinterpret_cast<ColumnVecType<T1> *>(&indices_);
-    else
-        vec1 = &(get_column<T1>(name1));
-
-    if (! ::strcmp(name2, DF_INDEX_COL_NAME))
-        vec2 = reinterpret_cast<ColumnVecType<T2> *>(&indices_);
-    else
-        vec2 = &(get_column<T2>(name2));
-
-    if (! ::strcmp(name3, DF_INDEX_COL_NAME))
-        vec3 = reinterpret_cast<ColumnVecType<T3> *>(&indices_);
-    else
-        vec3 = &(get_column<T3>(name3));
-
-    if (! ::strcmp(name4, DF_INDEX_COL_NAME))
-        vec4 = reinterpret_cast<ColumnVecType<T4> *>(&indices_);
-    else
-        vec4 = &(get_column<T4>(name4));
-
-    if (! ::strcmp(name4, DF_INDEX_COL_NAME))
-        vec5 = reinterpret_cast<ColumnVecType<T5> *>(&indices_);
-    else
-        vec5 = &(get_column<T5>(name5));
-
-    auto    cf =
-        [vec1, vec2, vec3, vec4, vec5, dir1, dir2, dir3, dir4, dir5]
-        (size_type i, size_type j) -> bool {
-            if (dir1 == sort_spec::ascen)  {
-                if (vec1->at(i) < vec1->at(j))
-                    return (true);
-                else if (vec1->at(i) > vec1->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec1->at(i) > vec1->at(j))
-                    return (true);
-                else if (vec1->at(i) < vec1->at(j))
-                    return (false);
-            }
-            if (dir2 == sort_spec::ascen)  {
-                if (vec2->at(i) < vec2->at(j))
-                    return (true);
-                else if (vec2->at(i) > vec2->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec2->at(i) > vec2->at(j))
-                    return (true);
-                else if (vec2->at(i) < vec2->at(j))
-                    return (false);
-            }
-            if (dir3 == sort_spec::ascen)  {
-                if (vec3->at(i) < vec3->at(j))
-                    return (true);
-                else if (vec3->at(i) > vec3->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec3->at(i) > vec3->at(j))
-                    return (true);
-                else if (vec3->at(i) < vec3->at(j))
-                    return (false);
-            }
-            if (dir4 == sort_spec::ascen)  {
-                if (vec4->at(i) < vec4->at(j))
-                    return (true);
-                else if (vec4->at(i) > vec4->at(j))
-                    return (false);
-            }
-            else  {
-                if (vec4->at(i) > vec4->at(j))
-                    return (true);
-                else if (vec4->at(i) < vec4->at(j))
-                    return (false);
-            }
-            if (dir5 == sort_spec::ascen)
-                return (vec5->at(i) < vec5->at(j));
-            else
-                return (vec5->at(i) > vec5->at(j));
-        };
-
-    sort_common_<decltype(cf), Ts ...>(*this, std::move(cf));
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T, typename ...Ts>
-std::future<void>
-DataFrame<I, H>::sort_async(const char *name, sort_spec dir)  {
-
-    return (std::async(std::launch::async,
-                       [name, dir, this] () -> void {
-                           this->sort<T, Ts ...>(name, dir);
-                       }));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, typename ... Ts>
-std::future<void>
-DataFrame<I, H>::
-sort_async(const char *name1, sort_spec dir1,
-           const char *name2, sort_spec dir2)  {
-
-    return (std::async(std::launch::async,
-                       [name1, dir1, name2, dir2, this] () -> void {
-                           this->sort<T1, T2, Ts ...>(name1, dir1,
-                                                      name2, dir2);
-                       }));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, typename T3, typename ... Ts>
-std::future<void>
-DataFrame<I, H>::
-sort_async(const char *name1, sort_spec dir1,
-           const char *name2, sort_spec dir2,
-           const char *name3, sort_spec dir3)  {
-
-    return (std::async(std::launch::async,
-                       [name1, dir1, name2, dir2, name3, dir3,
-                        this] () -> void {
-                           this->sort<T1, T2, T3, Ts ...>(name1, dir1,
-                                                          name2, dir2,
-                                                          name3, dir3);
-                       }));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, typename T3, typename T4, typename ... Ts>
-std::future<void>
-DataFrame<I, H>::
-sort_async(const char *name1, sort_spec dir1,
-           const char *name2, sort_spec dir2,
-           const char *name3, sort_spec dir3,
-           const char *name4, sort_spec dir4)  {
-
-    return (std::async(std::launch::async,
-                       [name1, dir1, name2, dir2, name3, dir3, name4, dir4,
-                        this] () -> void {
-                           this->sort<T1, T2, T3, T4, Ts ...>(name1, dir1,
-                                                              name2, dir2,
-                                                              name3, dir3,
-                                                              name4, dir4);
-                       }));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, typename T3, typename T4, typename T5,
-         typename ... Ts>
-std::future<void>
-DataFrame<I, H>::
-sort_async(const char *name1, sort_spec dir1,
-           const char *name2, sort_spec dir2,
-           const char *name3, sort_spec dir3,
-           const char *name4, sort_spec dir4,
-           const char *name5, sort_spec dir5)  {
-
-    return (std::async(std::launch::async,
-                       [name1, dir1, name2, dir2, name3, dir3, name4, dir4,
-                        name5, dir5, this] () -> void {
-                           this->sort<T1, T2, T3, T4, T5, Ts ...>(name1, dir1,
-                                                                  name2, dir2,
-                                                                  name3, dir3,
-                                                                  name4, dir4,
-                                                                  name5, dir5);
-                       }));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T, typename I_V, typename ... Ts>
-DataFrame<I, H> DataFrame<I, H>::
+template<comparable T, typename I_V, typename ... Ts>
+DataFrame<I, HeteroVector<std::size_t(H::align_value)>> DataFrame<I, H>::
 groupby1(const char *col_name, I_V &&idx_visitor, Ts&& ... args) const  {
 
     const ColumnVecType<T>  *gb_vec { nullptr };
@@ -1146,42 +710,50 @@ groupby1(const char *col_name, I_V &&idx_visitor, Ts&& ... args) const  {
     else
         gb_vec = (const ColumnVecType<T> *) &(get_column<T>(col_name));
 
-    std::vector<std::size_t>    sort_v (gb_vec->size(), 0);
+    const bool              already_sorted { std::ranges::is_sorted(*gb_vec) };
+    StlVecType<std::size_t> sort_v;
 
-    std::iota(sort_v.begin(), sort_v.end(), 0);
-    std::sort(sort_v.begin(), sort_v.end(),
-              [gb_vec](std::size_t i, std::size_t j) -> bool  {
-                  return (gb_vec->at(i) < gb_vec->at(j));
-              });
+    if (! already_sorted)  {
+        sort_v.resize(gb_vec->size(), 0);
+        std::iota(sort_v.begin(), sort_v.end(), 0);
+        std::ranges::sort(sort_v,
+                          [&gb_vec = std::as_const(*gb_vec)]
+                          (std::size_t i, std::size_t j) -> bool  {
+                              return (gb_vec[i] < gb_vec[j]);
+                          });
+    }
 
-    DataFrame   res;
-    auto        args_tuple = std::tuple<Ts ...>(args ...);
-    auto        func =
+    using res_t = DataFrame<I, HeteroVector<std::size_t(H::align_value)>>;
+
+    res_t   result;
+    auto    args_tuple = std::tuple<Ts ...>(args ...);
+    auto    func =
         [this,
-         &res,
-         gb_vec,
-         &sort_v,
+         &result,
+         &gb_vec = std::as_const(*gb_vec),
+         &sort_v = std::as_const(sort_v),
          idx_visitor = std::forward<I_V>(idx_visitor),
          col_name](auto &triple) mutable -> void {
             _load_groupby_data_1_(*this,
-                                  res,
+                                  result,
                                   triple,
                                   idx_visitor,
-                                  *gb_vec,
+                                  gb_vec,
                                   sort_v,
                                   col_name);
         };
 
-    for_each_in_tuple (args_tuple, func);
+    const SpinGuard guard { lock_ };
 
-    return (res);
+    for_each_in_tuple (args_tuple, func);
+    return (result);
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T1, typename T2, typename I_V, typename ... Ts>
-DataFrame<I, H> DataFrame<I, H>::
+template<comparable T1, comparable T2, typename I_V, typename ... Ts>
+DataFrame<I, HeteroVector<std::size_t(H::align_value)>> DataFrame<I, H>::
 groupby2(const char *col_name1,
          const char *col_name2,
          I_V &&idx_visitor,
@@ -1189,42 +761,54 @@ groupby2(const char *col_name1,
 
     const ColumnVecType<T1> *gb_vec1 { nullptr };
     const ColumnVecType<T2> *gb_vec2 { nullptr };
+    const SpinGuard         guard { lock_ };
 
     if (! ::strcmp(col_name1, DF_INDEX_COL_NAME))  {
         gb_vec1 = (const ColumnVecType<T1> *) &(get_index());
-        gb_vec2 = (const ColumnVecType<T2> *) &(get_column<T2>(col_name2));
+        gb_vec2 =
+            (const ColumnVecType<T2> *) &(get_column<T2>(col_name2, false));
     }
     else if (! ::strcmp(col_name2, DF_INDEX_COL_NAME))  {
-        gb_vec1 = (const ColumnVecType<T1> *) &(get_column<T1>(col_name1));
+        gb_vec1 =
+            (const ColumnVecType<T1> *) &(get_column<T1>(col_name1, false));
         gb_vec2 = (const ColumnVecType<T2> *) &(get_index());
     }
     else  {
-        gb_vec1 = (const ColumnVecType<T1> *) &(get_column<T1>(col_name1));
-        gb_vec2 = (const ColumnVecType<T2> *) &(get_column<T2>(col_name2));
+        gb_vec1 =
+            (const ColumnVecType<T1> *) &(get_column<T1>(col_name1, false));
+        gb_vec2 =
+            (const ColumnVecType<T2> *) &(get_column<T2>(col_name2, false));
     }
 
-    std::vector<std::size_t>    sort_v (std::min(gb_vec1->size(),
-                                                 gb_vec2->size()),
-                                        0);
+    // Zip vectors into a range of pairs
+    //
+    const auto              zipped { std::views::zip(*gb_vec1, *gb_vec2) };
+    const bool              already_sorted { std::ranges::is_sorted(zipped) };
+    StlVecType<std::size_t> sort_v;
 
-    std::iota(sort_v.begin(), sort_v.end(), 0);
-    std::sort(sort_v.begin(), sort_v.end(),
-              [gb_vec1, gb_vec2](std::size_t i, std::size_t j) -> bool  {
-                  if (gb_vec1->at(i) < gb_vec1->at(j))
-                      return (true);
-                  else if (gb_vec1->at(i) > gb_vec1->at(j))
-                      return (false);
-                  return (gb_vec2->at(i) < gb_vec2->at(j));
-              });
+    if (! already_sorted)  {
+        sort_v.resize(std::min(gb_vec1->size(), gb_vec2->size()), 0);
+        std::iota(sort_v.begin(), sort_v.end(), 0);
+        std::ranges::sort(sort_v,
+                          [&gb_vec1 = std::as_const(*gb_vec1),
+                           &gb_vec2 = std::as_const(*gb_vec2)]
+                          (std::size_t i, std::size_t j) -> bool  {
+                              if (gb_vec1[i] != gb_vec1[j])
+                                  return (gb_vec1[i] < gb_vec1[j]);
+                              return (gb_vec2[i] < gb_vec2[j]);
+                          });
+    }
 
-    DataFrame   res;
-    auto        args_tuple = std::tuple<Ts ...>(args ...);
-    auto        func =
+    using res_t = DataFrame<I, HeteroVector<std::size_t(H::align_value)>>;
+
+    res_t   res;
+    auto    args_tuple = std::tuple<Ts ...>(args ...);
+    auto    func =
         [*this,
          &res,
-         gb_vec1,
-         gb_vec2,
-         &sort_v,
+         &gb_vec1 = std::as_const(*gb_vec1),
+         &gb_vec2 = std::as_const(*gb_vec2),
+         &sort_v = std::as_const(sort_v),
          idx_visitor = std::forward<I_V>(idx_visitor),
          col_name1,
          col_name2](auto &triple) mutable -> void {
@@ -1232,23 +816,23 @@ groupby2(const char *col_name1,
                                   res,
                                   triple,
                                   idx_visitor,
-                                  *gb_vec1,
-                                  *gb_vec2,
+                                  gb_vec1,
+                                  gb_vec2,
                                   sort_v,
                                   col_name1,
                                   col_name2);
         };
 
     for_each_in_tuple (args_tuple, func);
-
     return (res);
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T1, typename T2, typename T3, typename I_V, typename ... Ts>
-DataFrame<I, H> DataFrame<I, H>::
+template<comparable T1, comparable T2, comparable T3,
+         typename I_V, typename ... Ts>
+DataFrame<I, HeteroVector<std::size_t(H::align_value)>> DataFrame<I, H>::
 groupby3(const char *col_name1,
          const char *col_name2,
          const char *col_name3,
@@ -1258,55 +842,75 @@ groupby3(const char *col_name1,
     const ColumnVecType<T1> *gb_vec1 { nullptr };
     const ColumnVecType<T2> *gb_vec2 { nullptr };
     const ColumnVecType<T3> *gb_vec3 { nullptr };
+    const SpinGuard         guard { lock_ };
 
     if (! ::strcmp(col_name1, DF_INDEX_COL_NAME))  {
         gb_vec1 = (const ColumnVecType<T1> *) &(get_index());
-        gb_vec2 = (const ColumnVecType<T2> *) &(get_column<T2>(col_name2));
-        gb_vec3 = (const ColumnVecType<T3> *) &(get_column<T3>(col_name3));
+        gb_vec2 =
+            (const ColumnVecType<T2> *) &(get_column<T2>(col_name2, false));
+        gb_vec3 =
+            (const ColumnVecType<T3> *) &(get_column<T3>(col_name3, false));
     }
     else if (! ::strcmp(col_name2, DF_INDEX_COL_NAME))  {
-        gb_vec1 = (const ColumnVecType<T1> *) &(get_column<T1>(col_name1));
-        gb_vec2 = (const ColumnVecType<T2> *) &(get_index());
-        gb_vec3 = (const ColumnVecType<T3> *) &(get_column<T3>(col_name3));
+        gb_vec1 =
+            (const ColumnVecType<T1> *) &(get_column<T1>(col_name1, false));
+        gb_vec2 =
+            (const ColumnVecType<T2> *) &(get_index());
+        gb_vec3 =
+            (const ColumnVecType<T3> *) &(get_column<T3>(col_name3, false));
     }
     else if (! ::strcmp(col_name3, DF_INDEX_COL_NAME))  {
-        gb_vec1 = (const ColumnVecType<T1> *) &(get_column<T1>(col_name1));
-        gb_vec2 = (const ColumnVecType<T2> *) &(get_column<T2>(col_name2));
+        gb_vec1 =
+            (const ColumnVecType<T1> *) &(get_column<T1>(col_name1, false));
+        gb_vec2 =
+            (const ColumnVecType<T2> *) &(get_column<T2>(col_name2, false));
         gb_vec3 = (const ColumnVecType<T3> *) &(get_index());
     }
     else  {
-        gb_vec1 = (const ColumnVecType<T1> *) &(get_column<T1>(col_name1));
-        gb_vec2 = (const ColumnVecType<T2> *) &(get_column<T2>(col_name2));
-        gb_vec3 = (const ColumnVecType<T3> *) &(get_column<T3>(col_name3));
+        gb_vec1 =
+            (const ColumnVecType<T1> *) &(get_column<T1>(col_name1, false));
+        gb_vec2 =
+            (const ColumnVecType<T2> *) &(get_column<T2>(col_name2, false));
+        gb_vec3 =
+            (const ColumnVecType<T3> *) &(get_column<T3>(col_name3, false));
     }
 
-    std::vector<std::size_t>    sort_v(
-        std::min({ gb_vec1->size(), gb_vec2->size(), gb_vec3->size() }), 0);
+    const auto              zipped {
+        std::views::zip(*gb_vec1, *gb_vec2, *gb_vec3)
+    };
+    const bool              already_sorted { std::ranges::is_sorted(zipped) };
+    StlVecType<std::size_t> sort_v;
 
-    std::iota(sort_v.begin(), sort_v.end(), 0);
-    std::sort(sort_v.begin(), sort_v.end(),
-              [gb_vec1, gb_vec2, gb_vec3](std::size_t i,
-                                          std::size_t j) -> bool  {
-                  if (gb_vec1->at(i) < gb_vec1->at(j))
-                      return (true);
-                  else if (gb_vec1->at(i) > gb_vec1->at(j))
-                      return (false);
-                  else if (gb_vec2->at(i) < gb_vec2->at(j))
-                      return (true);
-                  else if (gb_vec2->at(i) > gb_vec2->at(j))
-                      return (false);
-                  return (gb_vec3->at(i) < gb_vec3->at(j));
-              });
+    if (! already_sorted)  {
+        sort_v.resize(std::min({ gb_vec1->size(),
+                                 gb_vec2->size(),
+                                 gb_vec3->size() }),
+                      0);
+        std::iota(sort_v.begin(), sort_v.end(), 0);
+        std::ranges::sort(sort_v,
+                          [&gb_vec1 = std::as_const(*gb_vec1),
+                           &gb_vec2 = std::as_const(*gb_vec2),
+                           &gb_vec3 = std::as_const(*gb_vec3)]
+                          (std::size_t i, std::size_t j) -> bool  {
+                              if (gb_vec1[i] != gb_vec1[j])
+                                  return (gb_vec1[i] < gb_vec1[j]);
+                              if (gb_vec2[i] != gb_vec2[j])
+                                  return (gb_vec2[i] < gb_vec2[j]);
+                              return (gb_vec3[i] < gb_vec3[j]);
+                          });
+    }
 
-    DataFrame   res;
-    auto        args_tuple = std::tuple<Ts ...>(args ...);
-    auto        func =
+    using res_t = DataFrame<I, HeteroVector<std::size_t(H::align_value)>>;
+
+    res_t   res;
+    auto    args_tuple = std::tuple<Ts ...>(args ...);
+    auto    func =
         [*this,
          &res,
-         gb_vec1,
-         gb_vec2,
-         gb_vec3,
-         &sort_v,
+         &gb_vec1 = std::as_const(*gb_vec1),
+         &gb_vec2 = std::as_const(*gb_vec2),
+         &gb_vec3 = std::as_const(*gb_vec3),
+         &sort_v = std::as_const(sort_v),
          idx_visitor = std::forward<I_V>(idx_visitor),
          col_name1,
          col_name2,
@@ -1315,9 +919,9 @@ groupby3(const char *col_name1,
                                   res,
                                   triple,
                                   idx_visitor,
-                                  *gb_vec1,
-                                  *gb_vec2,
-                                  *gb_vec3,
+                                  gb_vec1,
+                                  gb_vec2,
+                                  gb_vec3,
                                   sort_v,
                                   col_name1,
                                   col_name2,
@@ -1325,73 +929,89 @@ groupby3(const char *col_name1,
         };
 
     for_each_in_tuple (args_tuple, func);
-
     return (res);
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T, typename I_V, typename ... Ts>
-std::future<DataFrame<I, H>> DataFrame<I, H>::
+template<comparable T, typename I_V, typename ... Ts>
+std::future<DataFrame<I, HeteroVector<std::size_t(H::align_value)>>>
+DataFrame<I, H>::
 groupby1_async(const char *col_name, I_V &&idx_visitor, Ts&& ... args) const {
 
-    return (std::async(std::launch::async,
-                       &DataFrame::groupby1<T, I_V, Ts ...>,
-                           this,
-                           col_name,
-                           std::forward<I_V>(idx_visitor),
-                           std::forward<Ts>(args) ...));
+    return (thr_pool_.dispatch(
+        true,
+        [col_name, idx_visitor = std::forward<I_V>(idx_visitor),
+         ... args = std::forward<Ts>(args), this]() mutable -> DataFrame  {
+            return (this->groupby1<T, I_V, Ts ...>(
+                        col_name,
+                        std::forward<I_V>(idx_visitor),
+                        std::forward<Ts>(args) ...));
+        }));
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T1, typename T2, typename I_V, typename ... Ts>
-std::future<DataFrame<I, H>> DataFrame<I, H>::
+template<comparable T1, comparable T2, typename I_V, typename ... Ts>
+std::future<DataFrame<I, HeteroVector<std::size_t(H::align_value)>>>
+DataFrame<I, H>::
 groupby2_async(const char *col_name1,
                const char *col_name2,
                I_V &&idx_visitor,
                Ts&& ... args) const  {
 
-    return (std::async(std::launch::async,
-                       &DataFrame::groupby2<T1, T2, I_V, Ts ...>,
-                           this,
-                           col_name1,
-                           col_name2,
-                           std::forward<I_V>(idx_visitor),
-                           std::forward<Ts>(args) ...));
+    return (thr_pool_.dispatch(
+        true,
+        [col_name1, col_name2,
+         idx_visitor = std::forward<I_V>(idx_visitor),
+         ... args = std::forward<Ts>(args),
+         this]() mutable -> DataFrame  {
+            return (this->groupby2<T1, T2, I_V, Ts ...>(
+                        col_name1,
+                        col_name2,
+                        std::forward<I_V>(idx_visitor),
+                        std::forward<Ts>(args) ...));
+        }));
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T1, typename T2, typename T3, typename I_V, typename ... Ts>
-std::future<DataFrame<I, H>> DataFrame<I, H>::
+template<comparable T1, comparable T2, comparable T3,
+         typename I_V, typename ... Ts>
+std::future<DataFrame<I, HeteroVector<std::size_t(H::align_value)>>>
+DataFrame<I, H>::
 groupby3_async(const char *col_name1,
                const char *col_name2,
                const char *col_name3,
                I_V &&idx_visitor,
                Ts&& ... args) const  {
 
-    return (std::async(std::launch::async,
-                       &DataFrame::groupby3<T1, T2, T3, I_V, Ts ...>,
-                           this,
-                           col_name1,
-                           col_name2,
-                           col_name3,
-                           std::forward<I_V>(idx_visitor),
-                           std::forward<Ts>(args) ...));
+    return (thr_pool_.dispatch(
+        true,
+        [col_name1, col_name2, col_name3,
+         idx_visitor = std::forward<I_V>(idx_visitor),
+         ... args = std::forward<Ts>(args),
+         this]() mutable -> DataFrame  {
+            return (this->groupby3<T1, T2, T3, I_V, Ts ...>(
+                        col_name1,
+                        col_name2,
+                        col_name3,
+                        std::forward<I_V>(idx_visitor),
+                        std::forward<Ts>(args) ...));
+        }));
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T>
-StdDataFrame<T>
+template<hashable_equal T>
+DataFrame<T, HeteroVector<std::size_t(H::align_value)>>
 DataFrame<I, H>::value_counts (const char *col_name) const  {
 
-    const ColumnVecType<T>  &vec = get_column<T>(col_name);
+    const ColumnVecType<T>  &vec { get_column<T>(col_name) };
     auto                    hash_func =
         [](std::reference_wrapper<const T> v) -> std::size_t  {
             return(std::hash<T>{}(v.get()));
@@ -1402,33 +1022,37 @@ DataFrame<I, H>::value_counts (const char *col_name) const  {
             return(lhs.get() == rhs.get());
     };
 
-    std::unordered_map<
-        typename std::reference_wrapper<const T>::type,
-        size_type,
-        decltype(hash_func),
-        decltype(equal_func)>   values_map(vec.size(), hash_func, equal_func);
-    size_type                   nan_count = 0;
+    using map_t =
+        DFUnorderedMap<typename std::reference_wrapper<const T>::type,
+                       size_type,
+                       decltype(hash_func),
+                       decltype(equal_func)>;
+    using res_t = DataFrame<T, HeteroVector<align_value>>;
+
+    map_t       values_map { vec.size() / 8, hash_func, equal_func };
+    size_type   nan_count { 0 };
 
     // take care of nans
-    for (auto citer : vec)  {
-        if (is_nan<T>(citer))  {
+    //
+    for (const auto &citer : vec) [[likely]]  {
+        if (is_nan<T>(citer)) [[unlikely]]  {
             ++nan_count;
             continue;
         }
 
-        auto    insert_result = values_map.emplace(std::ref(citer), 1);
+        auto    insert_result { values_map.emplace(std::ref(citer), 1) };
 
         if (insert_result.second == false)
             insert_result.first->second += 1;
     }
 
-    std::vector<T>          res_indices;
-    std::vector<size_type>  counts;
+    typename res_t::IndexVecType                        res_indices;
+    typename res_t::template ColumnVecType<size_type>   counts;
 
     counts.reserve(values_map.size());
     res_indices.reserve(values_map.size());
 
-    for (const auto citer : values_map)  {
+    for (const auto &citer : values_map) [[likely]]  {
         res_indices.push_back(citer.first);
         counts.emplace_back(citer.second);
     }
@@ -1437,10 +1061,10 @@ DataFrame<I, H>::value_counts (const char *col_name) const  {
         counts.emplace_back(nan_count);
     }
 
-    StdDataFrame<T> result_df;
+    res_t   result_df;
 
     result_df.load_index(std::move(res_indices));
-    result_df.load_column("counts", std::move(counts));
+    result_df.template load_column<size_type>("counts", std::move(counts));
 
     return(result_df);
 }
@@ -1448,8 +1072,9 @@ DataFrame<I, H>::value_counts (const char *col_name) const  {
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T>
-StdDataFrame<T> DataFrame<I, H>::value_counts(size_type index) const  {
+template<hashable_equal T>
+DataFrame<T, HeteroVector<std::size_t(H::align_value)>>
+DataFrame<I, H>::value_counts(size_type index) const  {
 
     return (value_counts<T>(column_list_[index].first.c_str()));
 }
@@ -1457,27 +1082,34 @@ StdDataFrame<T> DataFrame<I, H>::value_counts(size_type index) const  {
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename V, typename I_V, typename ... Ts>
-DataFrame<I, H> DataFrame<I, H>::
-bucketize(bucket_type bt,
-          const V &value,
-          I_V &&idx_visitor,
-          Ts&& ... args) const  {
+template<typename T, typename F>
+typename DataFrame<I, H>::size_type DataFrame<I, H>::
+count(const char *col_name, F &&functor) const requires
+std::invocable<F, const IndexType &, const T &> &&
+std::same_as<std::invoke_result_t<F, const IndexType &, const T &>, bool>  {
 
-    DataFrame       result;
-    auto            &dst_idx = result.get_index();
-    const auto      &src_idx = get_index();
-    const size_type idx_s = src_idx.size();
+    const ColumnVecType<T>  &vec = get_column<T>(col_name);
+    const size_type         col_s = vec.size();
+    const auto              thread_level =
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level();
+    auto                    lbd =
+        [this, &functor, &vec = std::as_const(vec)]
+        (auto begin, auto end) -> size_type  {
+            size_type   sum { 0 };
 
-    _bucketize_core_(dst_idx, src_idx, src_idx, value, idx_visitor, idx_s, bt);
-
-    auto    args_tuple = std::tuple<Ts ...>(args ...);
-    auto    func =
-        [this, &result, &value, bt](auto &triple) mutable -> void {
-            _load_bucket_data_(*this, result, value, bt, triple);
+            for (auto i = begin; i < end; ++i)
+                sum += size_type(functor(indices_[i], vec[i]));
+            return (sum);
         };
+    size_type               result { 0 };
 
-    for_each_in_tuple (args_tuple, func);
+    if (thread_level > 2)  {
+        auto    futures =
+            thr_pool_.parallel_loop<T>(size_type(0), col_s, std::move(lbd));
+
+        for (auto &fut : futures)  result += fut.get();
+    }
+    else  result = lbd(size_type(0), col_s);
 
     return (result);
 }
@@ -1485,21 +1117,1193 @@ bucketize(bucket_type bt,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
+template<typename T1, typename T2, typename F>
+typename DataFrame<I, H>::size_type DataFrame<I, H>::
+count(const char *col_name1, const char *col_name2,
+      F &&functor) const requires
+std::invocable<F, const IndexType &, const T1 &, const T2 &> &&
+std::same_as<std::invoke_result_t<F, const IndexType &,
+                                  const T1 &, const T2 &>, bool>  {
+
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(col_name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(col_name2, false);
+
+    guard.release();
+
+    const size_type col_s = std::min(vec1.size(), vec2.size());
+    const auto      thread_level =
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level();
+    auto            lbd =
+        [this, &functor,
+         &vec1 = std::as_const(vec1), &vec2 = std::as_const(vec2)]
+        (auto begin, auto end) -> size_type  {
+            size_type   sum { 0 };
+
+            for (auto i = begin; i < end; ++i)
+                sum += size_type(functor(indices_[i], vec1[i], vec2[i]));
+            return (sum);
+        };
+    size_type       result { 0 };
+
+    if (thread_level > 2)  {
+        auto    futures =
+            thr_pool_.parallel_loop<T1>(size_type(0), col_s, std::move(lbd));
+
+        for (auto &fut : futures)  result += fut.get();
+    }
+    else  result = lbd(size_type(0), col_s);
+
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename T1, typename T2, typename T3, typename F>
+typename DataFrame<I, H>::size_type DataFrame<I, H>::
+count(const char *col_name1, const char *col_name2, const char *col_name3,
+      F &&functor) const requires
+std::invocable<F, const IndexType &, const T1 &, const T2 &, const T3 &> &&
+std::same_as<std::invoke_result_t<F, const IndexType &,
+                                  const T1 &, const T2 &, const T3 &>, bool>  {
+
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(col_name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(col_name2, false);
+    const ColumnVecType<T3> &vec3 = get_column<T3>(col_name3, false);
+
+    guard.release();
+
+    const size_type col_s =
+        std::min({ vec1.size(), vec2.size(), vec3.size() });
+    const auto      thread_level =
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level();
+    auto            lbd =
+        [this, &functor,
+         &vec1 = std::as_const(vec1), &vec2 = std::as_const(vec2),
+         &vec3 = std::as_const(vec3)]
+        (auto begin, auto end) -> size_type  {
+            size_type   sum { 0 };
+
+            for (auto i = begin; i < end; ++i)
+                sum += size_type(functor(indices_[i],
+                                         vec1[i], vec2[i], vec3[i]));
+            return (sum);
+        };
+    size_type       result { 0 };
+
+    if (thread_level > 2)  {
+        auto    futures =
+            thr_pool_.parallel_loop<T1>(size_type(0), col_s, std::move(lbd));
+
+        for (auto &fut : futures)  result += fut.get();
+    }
+    else  result = lbd(size_type(0), col_s);
+
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename T1, typename T2, typename T3, typename T4, typename F>
+typename DataFrame<I, H>::size_type DataFrame<I, H>::
+count(const char *col_name1, const char *col_name2,
+      const char *col_name3, const char *col_name4,
+      F &&functor) const requires
+std::invocable<F, const IndexType &,
+               const T1 &, const T2 &, const T3 &, const T4 &> &&
+std::same_as<std::invoke_result_t<F, const IndexType &,
+                                  const T1 &, const T2 &,
+                                  const T3 &, const T4 &>, bool>  {
+
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(col_name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(col_name2, false);
+    const ColumnVecType<T3> &vec3 = get_column<T3>(col_name3, false);
+    const ColumnVecType<T4> &vec4 = get_column<T4>(col_name4, false);
+
+    guard.release();
+
+    const size_type col_s =
+        std::min({ vec1.size(), vec2.size(), vec3.size(), vec4.size() });
+    const auto      thread_level =
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level();
+    auto            lbd =
+        [this, &functor,
+         &vec1 = std::as_const(vec1), &vec2 = std::as_const(vec2),
+         &vec3 = std::as_const(vec3), &vec4 = std::as_const(vec4)]
+        (auto begin, auto end) -> size_type  {
+            size_type   sum { 0 };
+
+            for (auto i = begin; i < end; ++i)
+                sum += size_type(functor(indices_[i],
+                                         vec1[i], vec2[i], vec3[i], vec4[i]));
+            return (sum);
+        };
+    size_type       result { 0 };
+
+    if (thread_level > 2)  {
+        auto    futures =
+            thr_pool_.parallel_loop<T1>(size_type(0), col_s, std::move(lbd));
+
+        for (auto &fut : futures)  result += fut.get();
+    }
+    else  result = lbd(size_type(0), col_s);
+
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<EnumType E,  typename T, typename F>
+std::unordered_map<E, typename DataFrame<I, H>::size_type> DataFrame<I, H>::
+class_count(const char *col_name, F &&functor) const requires
+std::invocable<F, const IndexType &, const T &> &&
+std::same_as<std::invoke_result_t<F, const IndexType &, const T &>, E>  {
+
+    using result_t = std::unordered_map<E, size_type>;
+
+    const ColumnVecType<T> &vec = get_column<T>(col_name);
+    const size_type        col_s = vec.size();
+    const auto             thread_level =
+        (col_s < (ThreadPool::MUL_THR_THHOLD * 2)) ? 0L : get_thread_level();
+    auto                   lbd =
+        [this, &functor, &vec = std::as_const(vec)]
+        (auto begin, auto end) -> result_t  {
+            result_t    result;
+
+            for (size_type i { begin }; i < end; ++i)
+               result[functor(indices_[i], vec[i])] += 1;
+            return (result);
+        };
+    result_t               result;
+
+    if (thread_level > 2)  {
+        auto    futures =
+            thr_pool_.parallel_loop<T>(size_type(0), col_s, std::move(lbd));
+
+        for (auto &fut : futures)  {
+            for (const auto [key, value] : fut.get())
+                result[key] += value;
+        }
+    }
+    else  result = lbd(size_type(0), col_s);
+
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<EnumType E, typename T1, typename T2, typename F>
+std::unordered_map<E, typename DataFrame<I, H>::size_type> DataFrame<I, H>::
+class_count(const char *col_name1, const char *col_name2,
+            F &&functor) const requires
+std::invocable<F, const IndexType &, const T1 &, const T2 &> &&
+std::same_as<std::invoke_result_t<F, const IndexType &,
+                                  const T1 &, const T2 &>, E>  {
+
+    using result_t = std::unordered_map<E, size_type>;
+
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(col_name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(col_name2, false);
+
+    guard.release();
+
+    const size_type col_s = std::min(vec1.size(), vec2.size());
+    const auto      thread_level =
+        (col_s < (ThreadPool::MUL_THR_THHOLD * 2)) ? 0L : get_thread_level();
+    auto            lbd =
+        [this, &functor,
+         &vec1 = std::as_const(vec1), &vec2 = std::as_const(vec2)]
+        (auto begin, auto end) -> result_t  {
+            result_t    result;
+
+            for (size_type i { begin }; i < end; ++i)
+                result[functor(indices_[i], vec1[i], vec2[i])] += 1;
+            return (result);
+        };
+    result_t        result;
+
+    if (thread_level > 2)  {
+        auto    futures =
+            thr_pool_.parallel_loop<T1>(size_type(0), col_s, std::move(lbd));
+
+        for (auto &fut : futures)  {
+            for (const auto [key, value] : fut.get())
+                result[key] += value;
+        }
+    }
+    else  result = lbd(size_type(0), col_s);
+
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<EnumType E, typename T1, typename T2, typename T3, typename F>
+std::unordered_map<E, typename DataFrame<I, H>::size_type> DataFrame<I, H>::
+class_count(const char *col_name1, const char *col_name2,
+            const char *col_name3, F &&functor) const requires
+std::invocable<F, const IndexType &,
+               const T1 &, const T2 &, const T3 &> &&
+std::same_as<std::invoke_result_t<F, const IndexType &,
+                                  const T1 &, const T2 &, const T3 &>, E>  {
+
+    using result_t = std::unordered_map<E, size_type>;
+
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(col_name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(col_name2, false);
+    const ColumnVecType<T3> &vec3 = get_column<T3>(col_name3, false);
+
+    guard.release();
+
+    const size_type col_s =
+        std::min({ vec1.size(), vec2.size(), vec3.size() });
+    const auto      thread_level =
+        (col_s < (ThreadPool::MUL_THR_THHOLD * 2)) ? 0L : get_thread_level();
+    auto            lbd =
+        [this, &functor,
+         &vec1 = std::as_const(vec1), &vec2 = std::as_const(vec2),
+         &vec3 = std::as_const(vec3)]
+        (auto begin, auto end) -> result_t  {
+            result_t    result;
+
+            for (size_type i { begin }; i < end; ++i)
+                result[functor(indices_[i], vec1[i], vec2[i], vec3[i])] += 1;
+            return (result);
+        };
+    result_t        result;
+
+    if (thread_level > 2)  {
+        auto    futures =
+            thr_pool_.parallel_loop<T1>(size_type(0), col_s, std::move(lbd));
+
+        for (auto &fut : futures)  {
+            for (const auto [key, value] : fut.get())
+                result[key] += value;
+        }
+    }
+    else  result = lbd(size_type(0), col_s);
+
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<EnumType E, typename T1, typename T2, typename T3, typename T4,
+             typename F>
+std::unordered_map<E, typename DataFrame<I, H>::size_type> DataFrame<I, H>::
+class_count(const char *col_name1, const char *col_name2,
+            const char *col_name3, const char *col_name4,
+            F &&functor) const requires
+std::invocable<F, const IndexType &,
+               const T1 &, const T2 &, const T3 &, const T4 &> &&
+std::same_as<std::invoke_result_t<F, const IndexType &,
+                                  const T1 &, const T2 &,
+                                  const T3 &, const T4 &>, E>  {
+
+    using result_t = std::unordered_map<E, size_type>;
+
+    SpinGuard               guard (lock_);
+    const ColumnVecType<T1> &vec1 = get_column<T1>(col_name1, false);
+    const ColumnVecType<T2> &vec2 = get_column<T2>(col_name2, false);
+    const ColumnVecType<T3> &vec3 = get_column<T3>(col_name3, false);
+    const ColumnVecType<T4> &vec4 = get_column<T4>(col_name4, false);
+
+    guard.release();
+
+    const size_type col_s =
+        std::min({ vec1.size(), vec2.size(), vec3.size(), vec4.size() });
+    const auto      thread_level =
+        (col_s < (ThreadPool::MUL_THR_THHOLD * 2)) ? 0L : get_thread_level();
+    auto            lbd =
+        [this, &functor,
+         &vec1 = std::as_const(vec1), &vec2 = std::as_const(vec2),
+         &vec3 = std::as_const(vec3), &vec4 = std::as_const(vec4)]
+        (auto begin, auto end) -> result_t  {
+            result_t    result;
+
+            for (size_type i { begin }; i < end; ++i)
+                result[functor(indices_[i],
+                               vec1[i], vec2[i], vec3[i], vec4[i])] += 1;
+            return (result);
+        };
+    result_t        result;
+
+    if (thread_level > 2)  {
+        auto    futures =
+            thr_pool_.parallel_loop<T1>(size_type(0), col_s, std::move(lbd));
+
+        for (auto &fut : futures)  {
+            for (const auto [key, value] : fut.get())
+                result[key] += value;
+        }
+    }
+    else  result = lbd(size_type(0), col_s);
+
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<binary_array T>
+typename
+DataFrame<T, HeteroVector<std::size_t(H::align_value)>>::template
+    StlVecType<char>
+DataFrame<I, H>::starts_with(const char *col_name, const T &pattern) const  {
+
+    using res_t = StlVecType<char>;
+
+    const ColumnVecType<T>  *vec { nullptr };
+
+    if (! ::strcmp(col_name, DF_INDEX_COL_NAME))
+        vec = (const ColumnVecType<T> *) &(get_index());
+    else
+        vec = (const ColumnVecType<T> *) &(get_column<T>(col_name));
+
+    const size_type col_s { vec->size() };
+    res_t           result(col_s, char{ 0 });
+    const auto      thread_level {
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level()
+    };
+    auto            lbd =
+        [&result, vec, &pattern = std::as_const(pattern),
+         s = pattern.size()]
+        (size_type begin, size_type end) -> void  {
+            for (auto idx { begin }; idx < end; ++idx)  {
+                const auto  &val { (*vec)[idx] };
+
+                if (val.size() >= s)
+                    result[idx] =
+                        char(! std::memcmp(val.data(), pattern.data(), s));
+            }
+        };
+
+    if (thread_level > 2)  {
+        auto    futures {
+            thr_pool_.parallel_loop<char>(size_type(0), col_s, std::move(lbd))
+        };
+
+        for (auto &fut : futures)  fut.get();
+    }
+    else  lbd(size_type(0), col_s);
+
+    return(result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<binary_array T>
+typename
+DataFrame<T, HeteroVector<std::size_t(H::align_value)>>::template
+    StlVecType<char>
+DataFrame<I, H>::ends_with(const char *col_name, const T &pattern) const  {
+
+    using res_t = StlVecType<char>;
+
+    const ColumnVecType<T>  *vec { nullptr };
+
+    if (! ::strcmp(col_name, DF_INDEX_COL_NAME))
+        vec = (const ColumnVecType<T> *) &(get_index());
+    else
+        vec = (const ColumnVecType<T> *) &(get_column<T>(col_name));
+
+    const size_type col_s { vec->size() };
+    res_t           result(col_s, char{ 0 });
+    const auto      thread_level {
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level()
+    };
+    auto            lbd =
+        [&result, vec, &pattern = std::as_const(pattern),
+         p_s = pattern.size()]
+        (size_type begin, size_type end) -> void  {
+            for (auto idx { begin }; idx < end; ++idx)  {
+                const auto      &val { (*vec)[idx] };
+                const size_type v_s { val.size() };
+
+                if (v_s >= p_s)
+                    result[idx] =
+                        char(! std::memcmp(val.data() + (v_s - p_s),
+                                           pattern.data(),
+                                           p_s));
+            }
+        };
+
+    if (thread_level > 2)  {
+        auto    futures {
+            thr_pool_.parallel_loop<char>(size_type(0), col_s, std::move(lbd))
+        };
+
+        for (auto &fut : futures)  fut.get();
+    }
+    else  lbd(size_type(0), col_s);
+
+    return(result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<comparable T>
+typename DataFrame<I, H>::template StlVecType<char>
+DataFrame<I, H>::in_between(const char *col_name,
+                            const T &lower_bound,
+                            const T &upper_bound,
+                            inclusiveness incld) const  {
+
+    using res_t = StlVecType<char>;
+
+    const ColumnVecType<T>  *vec { nullptr };
+
+    if (! ::strcmp(col_name, DF_INDEX_COL_NAME))
+        vec = (const ColumnVecType<T> *) &(get_index());
+    else
+        vec = (const ColumnVecType<T> *) &(get_column<T>(col_name));
+
+    const size_type col_s { vec->size() };
+    res_t           result(col_s, char{ 0 });
+    const auto      thread_level {
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level()
+    };
+
+    if (incld == inclusiveness::begin)  {
+        auto    lbd =
+            [&result, vec,
+             &lower_bound = std::as_const(lower_bound),
+             &upper_bound = std::as_const(upper_bound)]
+            (size_type begin, size_type end) -> void  {
+                for (auto idx { begin }; idx < end; ++idx)  {
+                    const auto  &val = (*vec)[idx];
+
+                    if (val >= lower_bound && val < upper_bound)
+                        result[idx] = char{ 1 };
+                }
+            };
+
+        if (thread_level > 2)  {
+            auto    futures {
+                thr_pool_.parallel_loop<char>(size_type(0),
+                                              col_s,
+                                              std::move(lbd))
+            };
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  lbd(size_type(0), col_s);
+    }
+    else if (incld == inclusiveness::end)  {
+        auto    lbd =
+            [&result, vec,
+             &lower_bound = std::as_const(lower_bound),
+             &upper_bound = std::as_const(upper_bound)]
+            (size_type begin, size_type end) -> void  {
+                for (auto idx { begin }; idx < end; ++idx)  {
+                    const auto  &val = (*vec)[idx];
+
+                    if (val > lower_bound && val <= upper_bound)
+                        result[idx] = char{ 1 };
+                }
+            };
+
+        if (thread_level > 2)  {
+            auto    futures {
+                thr_pool_.parallel_loop<char>(size_type(0),
+                                              col_s,
+                                              std::move(lbd))
+            };
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  lbd(size_type(0), col_s);
+    }
+    else if (incld == inclusiveness::both)  {
+        auto    lbd =
+            [&result, vec,
+             &lower_bound = std::as_const(lower_bound),
+             &upper_bound = std::as_const(upper_bound)]
+            (size_type begin, size_type end) -> void  {
+                for (auto idx { begin }; idx < end; ++idx)  {
+                    const auto  &val = (*vec)[idx];
+
+                    if (val >= lower_bound && val <= upper_bound)
+                        result[idx] = char{ 1 };
+                }
+            };
+
+        if (thread_level > 2)  {
+            auto    futures {
+                thr_pool_.parallel_loop<char>(size_type(0),
+                                              col_s,
+                                              std::move(lbd))
+            };
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  lbd(size_type(0), col_s);
+    }
+    else if (incld == inclusiveness::neither)  {
+        auto    lbd =
+            [&result, vec,
+             &lower_bound = std::as_const(lower_bound),
+             &upper_bound = std::as_const(upper_bound)]
+            (size_type begin, size_type end) -> void  {
+                for (auto idx { begin }; idx < end; ++idx)  {
+                    const auto  &val = (*vec)[idx];
+
+                    if (val > lower_bound && val < upper_bound)
+                        result[idx] = char{ 1 };
+                }
+            };
+
+        if (thread_level > 2)  {
+            auto    futures {
+                thr_pool_.parallel_loop<char>(size_type(0),
+                                              col_s,
+                                              std::move(lbd))
+            };
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  lbd(size_type(0), col_s);
+    }
+
+    return(result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<std::floating_point T>
+typename DataFrame<I, H>::template StlVecType<char> DataFrame<I, H>::
+is_nan_mask(const char *col_name, bool not_flag) const  {
+
+    using res_t = StlVecType<char>;
+
+    const ColumnVecType<T>  *vec { nullptr };
+
+    if (! ::strcmp(col_name, DF_INDEX_COL_NAME))
+        vec = (const ColumnVecType<T> *) &(get_index());
+    else
+        vec = (const ColumnVecType<T> *) &(get_column<T>(col_name));
+
+    const size_type col_s = vec->size();
+    res_t           result (col_s, not_flag ? char(1) : char{ 0 });
+    const auto      thread_level =
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level();
+    auto            lbd =
+        [&result, &vec = std::as_const(*vec)]
+        (size_type begin, size_type end) -> void  {
+            for (auto idx = begin; idx < end; ++idx)
+                if (std::isnan(vec[idx])) [[unlikely]] result[idx] = char{ 1 };
+        };
+    auto            not_lbd =
+        [&result, &vec = std::as_const(*vec)]
+        (size_type begin, size_type end) -> void  {
+            for (auto idx = begin; idx < end; ++idx)
+                if (std::isnan(vec[idx])) [[likely]] result[idx] = char{ 0 };
+        };
+
+    if (thread_level > 2)  {
+        if (not_flag)  {
+            auto    futures =
+                thr_pool_.parallel_loop<char>(
+                    size_type(0), col_s, std::move(not_lbd));
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  {
+            auto    futures =
+                thr_pool_.parallel_loop<char>(
+                    size_type(0), col_s, std::move(lbd));
+
+            for (auto &fut : futures)  fut.get();
+        }
+    }
+    else  {
+        if (not_flag)  not_lbd(size_type(0), col_s);
+        else  lbd(size_type(0), col_s);
+    }
+
+    return(result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<std::floating_point T>
+typename DataFrame<I, H>::template StlVecType<char> DataFrame<I, H>::
+is_infinity_mask(const char *col_name, bool not_flag) const  {
+
+    using res_t = StlVecType<char>;
+
+    const ColumnVecType<T>  *vec { nullptr };
+
+    if (! ::strcmp(col_name, DF_INDEX_COL_NAME))
+        vec = (const ColumnVecType<T> *) &(get_index());
+    else
+        vec = (const ColumnVecType<T> *) &(get_column<T>(col_name));
+
+    const size_type col_s = vec->size();
+    res_t           result (col_s, not_flag ? char(1) : char{ 0 });
+    const auto      thread_level =
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level();
+    auto            lbd =
+        [&result, &vec = std::as_const(*vec)]
+        (size_type begin, size_type end) -> void  {
+            for (auto idx = begin; idx < end; ++idx)
+                if (std::isinf(vec[idx])) [[unlikely]] result[idx] = char{ 1 };
+        };
+    auto            not_lbd =
+        [&result, &vec = std::as_const(*vec)]
+        (size_type begin, size_type end) -> void  {
+            for (auto idx = begin; idx < end; ++idx)
+                if (std::isinf(vec[idx])) [[likely]] result[idx] = char{ 0 };
+        };
+
+    if (thread_level > 2)  {
+        if (not_flag)  {
+            auto    futures =
+                thr_pool_.parallel_loop<char>(
+                    size_type(0), col_s, std::move(not_lbd));
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  {
+            auto    futures =
+                thr_pool_.parallel_loop<char>(
+                    size_type(0), col_s, std::move(lbd));
+
+            for (auto &fut : futures)  fut.get();
+        }
+    }
+    else  {
+        if (not_flag)  not_lbd(size_type(0), col_s);
+        else  lbd(size_type(0), col_s);
+    }
+
+    return(result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<equality_default_construct T>
+typename DataFrame<I, H>::template StlVecType<char> DataFrame<I, H>::
+is_default_mask(const char *col_name, bool not_flag) const  {
+
+    using res_t = StlVecType<char>;
+
+    const T                 def_val { };
+    const ColumnVecType<T>  *vec { nullptr };
+
+    if (! ::strcmp(col_name, DF_INDEX_COL_NAME))
+        vec = (const ColumnVecType<T> *) &(get_index());
+    else
+        vec = (const ColumnVecType<T> *) &(get_column<T>(col_name));
+
+    const size_type col_s = vec->size();
+    res_t           result (col_s, not_flag ? char(1) : char{ 0 });
+    const auto      thread_level =
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level();
+    auto            lbd =
+        [&result, &vec = std::as_const(*vec),
+         &def_val = std::as_const(def_val)]
+        (size_type begin, size_type end) -> void  {
+            for (auto idx = begin; idx < end; ++idx)
+                if (vec[idx] == def_val) [[unlikely]] result[idx] = char{ 1 };
+        };
+    auto            not_lbd =
+        [&result, &vec = std::as_const(*vec),
+         &def_val = std::as_const(def_val)]
+        (size_type begin, size_type end) -> void  {
+            for (auto idx = begin; idx < end; ++idx)
+                if (vec[idx] == def_val) [[likely]] result[idx] = char{ 0 };
+        };
+
+    if (thread_level > 2)  {
+        if (not_flag)  {
+            auto    futures =
+                thr_pool_.parallel_loop<char>(
+                    size_type(0), col_s, std::move(not_lbd));
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  {
+            auto    futures =
+                thr_pool_.parallel_loop<char>(
+                    size_type(0), col_s, std::move(lbd));
+
+            for (auto &fut : futures)  fut.get();
+        }
+    }
+    else  {
+        if (not_flag)  not_lbd(size_type(0), col_s);
+        else  lbd(size_type(0), col_s);
+    }
+
+    return(result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<comparable T>
+typename
+DataFrame<T, HeteroVector<std::size_t(H::align_value)>>::template
+    StlVecType<char>
+DataFrame<I, H>::peaks(const char *col_name, size_type n) const  {
+
+    using res_t = StlVecType<char>;
+
+    const ColumnVecType<T>  *vec { nullptr };
+
+    if (! ::strcmp(col_name, DF_INDEX_COL_NAME))
+        vec = (const ColumnVecType<T> *) &(get_index());
+    else
+        vec = (const ColumnVecType<T> *) &(get_column<T>(col_name));
+
+    const size_type col_s { vec->size() };
+
+#ifdef HMDF_SANITY_EXCEPTIONS
+    if ((col_s <= (2 * n + 1)) || n < 1)
+        throw DataFrameError("peaks: column size must be >= 2n+1 and n > 0");
+#endif // HMDF_SANITY_EXCEPTIONS
+
+    res_t       result(col_s, char{ 0 });
+    const auto  thread_level {
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level()
+    };
+    auto        lbd1 =
+        [&result, vec](size_type begin, size_type end) -> void  {
+            const auto  &v { *vec };
+
+            for (auto idx { begin }; idx < end; ++idx)  {
+                const auto  &val { v[idx] };
+
+                if (val > v[idx + 1] && val > v[idx - 1])
+                    result[idx] = char{ 1 };
+            }
+        };
+    auto        lbd2 =
+        [&result, vec](size_type begin, size_type end) -> void  {
+            const auto  &v { *vec };
+
+            for (auto idx { begin }; idx < end; ++idx)  {
+                const auto  &val { v[idx] };
+
+                if (val > v[idx + 1] &&
+                    val > v[idx + 2] &&
+                    val > v[idx - 1] &&
+                    val > v[idx - 2])
+                    result[idx] = char{ 1 };
+            }
+        };
+    auto        lbdn =
+        [&result, vec, n](size_type begin, size_type end) -> void  {
+            const auto  &v { *vec };
+
+            for (auto idx { begin }; idx < end; ++idx)  {
+                const auto  &val { v[idx] };
+                char        c { 1 };
+
+                for (size_type j { 1 }; j <= n; ++j)  {
+                    if (val <= v[idx + j] || val <= v[idx - j])  {
+                        c = 0;
+                        break;
+                    }
+                }
+                result[idx] = c;
+            }
+        };
+
+    if (thread_level > 2)  {
+        std::vector<std::future<void>>  futures;
+
+        if (n == 1)
+            futures =
+                thr_pool_.parallel_loop<char>(n, col_s - n, std::move(lbd1));
+        else if (n == 2)
+            futures =
+                thr_pool_.parallel_loop<char>(n, col_s - n, std::move(lbd2));
+        else
+            futures =
+                thr_pool_.parallel_loop<char>(n, col_s - n, std::move(lbdn));
+
+        for (auto &fut : futures)  fut.get();
+    }
+    else  {
+        if (n == 1)  lbd1(n, col_s - n);
+        else if (n == 2)  lbd2(n, col_s - n);
+        else  lbdn(n, col_s - n);
+    }
+
+    return(result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<comparable T>
+typename
+DataFrame<T, HeteroVector<std::size_t(H::align_value)>>::template
+    StlVecType<char>
+DataFrame<I, H>::valleys(const char *col_name, size_type n) const  {
+
+    using res_t = StlVecType<char>;
+
+    const ColumnVecType<T>  *vec { nullptr };
+
+    if (! ::strcmp(col_name, DF_INDEX_COL_NAME))
+        vec = (const ColumnVecType<T> *) &(get_index());
+    else
+        vec = (const ColumnVecType<T> *) &(get_column<T>(col_name));
+
+    const size_type col_s { vec->size() };
+
+#ifdef HMDF_SANITY_EXCEPTIONS
+    if ((col_s <= (2 * n + 1)) || n < 1)
+        throw DataFrameError("valleys: column size must be >= 2n+1 and n > 0");
+#endif // HMDF_SANITY_EXCEPTIONS
+
+    res_t       result(col_s, char{ 0 });
+    const auto  thread_level {
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level()
+    };
+    auto        lbd1 =
+        [&result, vec](size_type begin, size_type end) -> void  {
+            const auto  &v { *vec };
+
+            for (auto idx { begin }; idx < end; ++idx)  {
+                const auto  &val { v[idx] };
+
+                if (val < v[idx + 1] && val < v[idx - 1])
+                    result[idx] = char{ 1 };
+            }
+        };
+    auto        lbd2 =
+        [&result, vec](size_type begin, size_type end) -> void  {
+            const auto  &v { *vec };
+
+            for (auto idx { begin }; idx < end; ++idx)  {
+                const auto  &val { v[idx] };
+
+                if (val < v[idx + 1] &&
+                    val < v[idx + 2] &&
+                    val < v[idx - 1] &&
+                    val < v[idx - 2])
+                    result[idx] = char{ 1 };
+            }
+        };
+    auto        lbdn =
+        [&result, vec, n](size_type begin, size_type end) -> void  {
+            const auto  &v { *vec };
+
+            for (auto idx { begin }; idx < end; ++idx)  {
+                const auto  &val { v[idx] };
+                char        c { 1 };
+
+                for (size_type j { 1 }; j <= n; ++j)  {
+                    if (val >= v[idx + j] || val >= v[idx - j])  {
+                        c = 0;
+                        break;
+                    }
+                }
+                result[idx] = c;
+            }
+        };
+
+    if (thread_level > 2)  {
+        std::vector<std::future<void>>  futures;
+
+        if (n == 1)
+            futures =
+                thr_pool_.parallel_loop<char>(n, col_s - n, std::move(lbd1));
+        else if (n == 2)
+            futures =
+                thr_pool_.parallel_loop<char>(n, col_s - n, std::move(lbd2));
+        else
+            futures =
+                thr_pool_.parallel_loop<char>(n, col_s - n, std::move(lbdn));
+
+        for (auto &fut : futures)  fut.get();
+    }
+    else  {
+        if (n == 1)  lbd1(n, col_s - n);
+        else if (n == 2)  lbd2(n, col_s - n);
+        else  lbdn(n, col_s - n);
+    }
+
+    return(result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
 template<typename V, typename I_V, typename ... Ts>
-std::future<DataFrame<I, H>>
+DataFrame<I, HeteroVector<std::size_t(H::align_value)>> DataFrame<I, H>::
+bucketize(bucket_type bt,
+          const V &value,
+          I_V &&idx_visitor,
+          Ts&& ... args) const  {
+
+    using res_t = DataFrame<I, HeteroVector<std::size_t(H::align_value)>>;
+
+    res_t           result;
+    auto            &dst_idx { result.get_index() };
+    const auto      &src_idx { get_index() };
+    const size_type idx_s { src_idx.size() };
+
+    _bucketize_core_(dst_idx, src_idx, src_idx, value, idx_visitor, idx_s, bt);
+
+    std::vector<std::future<void>>  futures;
+    const auto                      thread_level {
+        (indices_.size() < ThreadPool::MUL_THR_THHOLD)
+            ? 0L : get_thread_level()
+    };
+
+    if (thread_level > 2)  futures.reserve(column_list_.size());
+
+    auto    args_tuple { std::tuple<Ts ...>(args ...) };
+    auto    func =
+        [this, &result, &value = std::as_const(value), &futures, bt]
+        (auto &triple) mutable -> void {
+            _load_bucket_data_(*this, result, value, bt, triple, futures);
+        };
+
+    const SpinGuard guard { lock_ };
+
+    for_each_in_tuple (args_tuple, func);
+    for (auto &fut : futures)  fut.get();
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename V, typename I_V, typename ... Ts>
+std::future<DataFrame<I, HeteroVector<std::size_t(H::align_value)>>>
 DataFrame<I, H>::
 bucketize_async(bucket_type bt,
                 const V &value,
                 I_V &&idx_visitor,
                 Ts&& ... args) const  {
 
-    return (std::async(std::launch::async,
-                       &DataFrame::bucketize<V, I_V, Ts ...>,
-                           this,
-                           bt,
-                           std::cref(value),
-                           std::forward<I_V>(idx_visitor),
-                           std::forward<Ts>(args) ...));
+    using res_t = DataFrame<I, HeteroVector<std::size_t(H::align_value)>>;
+
+    return (thr_pool_.dispatch(
+        true,
+        [bt,
+         &value,
+         idx_visitor = std::forward<I_V>(idx_visitor),
+         ... args = std::forward<Ts>(args),
+         this]() mutable -> res_t  {
+            return (this->bucketize<V, I_V, Ts ...>(
+                        bt,
+                        std::cref(value),
+                        std::forward<I_V>(idx_visitor),
+                        std::forward<Ts>(args) ...));
+        }));
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename I_V, typename ... Ts>
+DataFrame<DateTime, H>
+DataFrame<I, H>::
+resample(time_frequency tf,
+         size_type interval_num,
+         I_V &&idx_visitor,
+         Ts && ... args) const
+    requires std::same_as<I, DateTime>  {
+
+    using res_t = DataFrame<DateTime, H>;
+
+    res_t           result;
+    auto            &dst_idx { result.get_index() };
+    const auto      &src_idx { get_index() };
+    const size_type idx_s { src_idx.size() };
+
+    _resample_core_(dst_idx,
+                    src_idx,
+                    src_idx,
+                    interval_num,
+                    idx_visitor,
+                    idx_s,
+                    tf);
+
+    std::vector<std::future<void>>  futures;
+    const auto                      thread_level {
+        (indices_.size() < ThreadPool::MUL_THR_THHOLD)
+            ? 0L : get_thread_level()
+    };
+
+    if (thread_level > 2)  futures.reserve(column_list_.size());
+
+    auto    args_tuple { std::tuple<Ts ...>(args ...) };
+    auto    func =
+        [this, &result, interval_num, &futures, tf]
+        (auto &triple) mutable -> void  {
+            _load_resample_data_(*this,
+                                 result,
+                                 interval_num,
+                                 tf,
+                                 triple,
+                                 futures);
+        };
+
+    const SpinGuard guard { lock_ };
+
+    for_each_in_tuple (args_tuple, func);
+    for (auto &fut : futures)  fut.get();
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename I_V, typename ... Ts>
+std::future<DataFrame<DateTime, H>>
+DataFrame<I, H>::
+resample_async(time_frequency tf,
+               size_type interval_num,
+               I_V &&idx_visitor,
+               Ts && ... args) const
+    requires std::same_as<I, DateTime>  {
+
+    using res_t = DataFrame<DateTime, H>;
+
+    return (thr_pool_.dispatch(
+        true,
+        [tf,
+         interval_num,
+         idx_visitor = std::forward<I_V>(idx_visitor),
+         ... args = std::forward<Ts>(args),
+         this]() mutable -> res_t  {
+            return (this->resample<I_V, Ts ...>(
+                        tf,
+                        interval_num,
+                        std::forward<I_V>(idx_visitor),
+                        std::forward<Ts>(args) ...));
+        }));
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename T>
+void DataFrame<I, H>::
+make_stationary(const char *col_name,
+                stationary_method method,
+                const StationaryParams params)  {
+
+    ColumnVecType<T>    &vec { get_column<T>(col_name) };
+    const size_type     col_s { vec.size() };
+
+#ifdef HMDF_SANITY_EXCEPTIONS
+    if (col_s < 3)
+        throw DataFrameError("make_stationary: Time-series is too short");
+#endif // HMDF_SANITY_EXCEPTIONS
+
+    const auto  thread_level {
+        (col_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level()
+    };
+
+    if (method == stationary_method::differencing)  {
+        ColumnVecType<T>    result(col_s);
+        auto                lbd =
+            [&result, &vec = std::as_const(vec)]
+            (auto begin, auto end) -> void  {
+                for (auto i { begin }; i < end; ++i)
+                    result[i] = vec[i] - vec[i - 1];
+            };
+
+        if (thread_level > 2)  {
+            auto    futures {
+                thr_pool_.parallel_loop<T>(size_type(1), col_s, std::move(lbd))
+            };
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  lbd(size_type(1), col_s);
+        vec = std::move(result);
+        vec[0] = vec[1];
+    }
+    else if (method == stationary_method::log_trans)  {
+        auto    lbd =
+            [](auto begin, auto end) -> void  {
+                for (auto citer { begin }; citer < end; ++citer)
+                    *citer = std::log(*citer);
+            };
+
+        if (thread_level > 2)  {
+            auto    futures {
+                thr_pool_.parallel_loop<T>(
+                    vec.begin(), vec.end(), std::move(lbd))
+            };
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  lbd(vec.begin(), vec.end());
+    }
+    else if (method == stationary_method::sqrt_trans)  {
+        auto    lbd =
+            [](auto begin, auto end) -> void  {
+                for (auto citer { begin }; citer < end; ++citer)
+                    *citer = std::sqrt(*citer);
+            };
+
+        if (thread_level > 2)  {
+            auto    futures {
+                thr_pool_.parallel_loop<T>(
+                    vec.begin(), vec.end(), std::move(lbd))
+            };
+
+            for (auto &fut : futures)  fut.get();
+        }
+        else  lbd(vec.begin(), vec.end());
+    }
+    else if (method == stationary_method::boxcox_trans)  {
+        bcox_v<T, I, align_value>   boxcox {
+            params.bc_type, params.lambda, params.is_all_positive
+        };
+
+        boxcox.pre();
+        boxcox(indices_.begin(), indices_.end(), vec.begin(), vec.end());
+        boxcox.post();
+        vec = std::move(boxcox.get_result());
+    }
+    else if (method == stationary_method::decomposition)  {
+        decom_v<T, I, align_value>  decom {
+            params.season_period, params.dcom_fraction,
+            params.dcom_delta, params.dcom_type
+        };
+
+        decom.pre();
+        decom(indices_.begin(), indices_.end(), vec.begin(), vec.end());
+        decom.post();
+        vec = std::move(decom.get_residual());
+    }
+    else if (method == stationary_method::smoothing)  {
+        ewm_v<T, I, align_value>    ewm {
+            params.decay_spec, params.decay_alpha, params.finite_adjust
+        };
+
+        ewm.pre();
+        ewm(indices_.begin(), indices_.end(), vec.begin(), vec.end());
+        ewm.post();
+        vec = std::move(ewm.get_result());
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -1509,37 +2313,53 @@ template<typename T, typename V>
 DataFrame<I, H> DataFrame<I, H>::
 transpose(IndexVecType &&indices, const V &new_col_names) const  {
 
-    const size_type num_cols = column_list_.size();
+    const size_type num_cols { column_list_.size() };
+    const size_type idx_s { indices_.size() };
 
-    if (new_col_names.size() != indices_.size())
+    if (new_col_names.size() != idx_s)
         throw InconsistentData ("DataFrame::transpose(): ERROR: "
                                 "Length of new_col_names is not equal "
                                 "to number of rows");
 
-    std::vector<const std::vector<T> *> current_cols;
+    StlVecType<const ColumnVecType<T> *>    current_cols;
 
     current_cols.reserve(num_cols);
-    for (const auto citer : column_list_)
+    for (const auto &citer : column_list_)
         current_cols.push_back(&(get_column<T>(citer.first.c_str())));
 
-    std::vector<std::vector<T>> trans_cols(indices_.size());
+    StlVecType<StlVecType<T>>   trans_cols(indices_.size());
     DataFrame                   df;
 
-    for (size_type i = 0; i < indices_.size(); ++i)  {
-        trans_cols[i].reserve(num_cols);
-        for (size_type j = 0; j < num_cols; ++j)  {
-            if (current_cols[j]->size() > i)
-                trans_cols[i].push_back((*(current_cols[j]))[i]);
-            else
-                trans_cols[i].push_back(get_nan<T>());
-        }
+    for (auto &vec : trans_cols)  vec.reserve(idx_s);
+    for (size_type j { 0 }; j < num_cols; ++j)  {
+        const auto      &col { *current_cols[j] };
+        const size_type col_size { col.size() };
+
+        for (size_type i { 0 }; i < idx_s; ++i)
+            trans_cols[i].push_back(i < col_size ? col[i] : get_nan<T>());
     }
 
     df.load_index(std::move(indices));
-    for (size_type i = 0; i < new_col_names.size(); ++i)
-        df.load_column(&(new_col_names[i][0]), std::move(trans_cols[i]));
+    for (size_type i { 0 }; i < new_col_names.size(); ++i)
+        df.template load_column<T>(&(new_col_names[i][0]),
+                                   std::move(trans_cols[i]));
 
     return (df);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename F, typename ... Ts>
+DataFrame<I, H> &DataFrame<I, H>::
+pipe(F &&func, Ts ... args)
+    requires std::invocable<F, DataFrame &, Ts ...> &&
+             std::same_as<std::invoke_result_t<F, DataFrame &, Ts ...>,
+                          DataFrame &>  {
+
+    return (std::invoke(std::forward<F>(func),
+                        *this,
+                        std::forward<Ts>(args) ...));
 }
 
 } // namespace hmdf

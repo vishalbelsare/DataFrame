@@ -1,7 +1,7 @@
 // Hossein Moein
 // October 24, 2018
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -32,6 +32,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <DataFrame/Vectors/VectorView.h>
 
 #include <functional>
+#include <new>
+#include <type_traits>
 #include <unordered_map>
 
 // ----------------------------------------------------------------------------
@@ -39,11 +41,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace hmdf
 {
 
-struct  HeteroView  {
+template<std::size_t A = 0>
+struct HeteroView  {
 
-    using size_type = size_t;
+    static constexpr std::align_val_t   align_value { A };
 
-    HeteroView() = default;
+    using size_type = std::size_t;
+
+    HeteroView();
     template<typename T>
     HeteroView(T *begin_ptr, T *end_ptr);
 
@@ -58,6 +63,8 @@ struct  HeteroView  {
     //
     template<typename T>
     void set_begin_end_special(T *bp, T *ep_1);
+    template<typename T>
+    void set_empty_vec();
 
     HeteroView(const HeteroView &that);
     HeteroView(HeteroView &&that);
@@ -68,63 +75,62 @@ struct  HeteroView  {
     HeteroView &operator= (HeteroView &&rhs);
 
     template<typename T>
-    VectorView<T> &get_vector();
+    [[nodiscard]] VectorView<T, A> &get_vector();
     template<typename T>
-    const VectorView<T> &get_vector() const;
+    [[nodiscard]] const VectorView<T, A> &get_vector() const;
 
     template<typename T>
-    typename VectorView<T>::
-    size_type size () const { return (get_vector<T>().size()); }
+    [[nodiscard]] size_type size () const { return (get_vector<T>().size()); }
 
     void clear();
 
     template<typename T>
-    bool empty() const noexcept;
+    [[nodiscard]] bool empty() const noexcept;
 
     template<typename T>
-    T &at(size_type idx);
+    [[nodiscard]] T &at(size_type idx);
     template<typename T>
-    const T &at(size_type idx) const;
+    [[nodiscard]] const T &at(size_type idx) const;
 
     template<typename T>
-    T &back();
+    [[nodiscard]] T &back();
     template<typename T>
-    const T &back() const;
+    [[nodiscard]] const T &back() const;
 
     template<typename T>
-    T &front();
+    [[nodiscard]] T &front();
     template<typename T>
-    const T &front() const;
+    [[nodiscard]] const T &front() const;
 
     template<typename T>
-    using iterator = typename VectorView<T>::iterator;
+    using iterator = typename VectorView<T, A>::iterator;
     template<typename T>
-    using const_iterator = typename VectorView<T>::const_iterator;
+    using const_iterator = typename VectorView<T, A>::const_iterator;
     template<typename T>
-    using reverse_iterator = typename VectorView<T>::reverse_iterator;
+    using reverse_iterator = typename VectorView<T, A>::reverse_iterator;
     template<typename T>
     using const_reverse_iterator =
-        typename VectorView<T>::const_reverse_iterator;
+        typename VectorView<T, A>::const_reverse_iterator;
 
     template<typename T>
-    iterator<T> begin();
+    [[nodiscard]] iterator<T> begin();
     template<typename T>
-    const_iterator<T> begin() const;
+    [[nodiscard]] const_iterator<T> begin() const;
 
     template<typename T>
-    iterator<T> end();
+    [[nodiscard]] iterator<T> end();
     template<typename T>
-    const_iterator<T> end() const;
+    [[nodiscard]] const_iterator<T> end() const;
 
     template<typename T>
-    reverse_iterator<T> rbegin();
+    [[nodiscard]] reverse_iterator<T> rbegin();
     template<typename T>
-    const_reverse_iterator<T> rbegin() const;
+    [[nodiscard]] const_reverse_iterator<T> rbegin() const;
 
     template<typename T>
-    reverse_iterator<T> rend();
+    [[nodiscard]] reverse_iterator<T> rend();
     template<typename T>
-    const_reverse_iterator<T> rend() const;
+    [[nodiscard]] const_reverse_iterator<T> rend() const;
 
     template<typename... Ts>
     struct type_list  {   };
@@ -162,16 +168,22 @@ private:
 
     template<typename T>
     inline static
-    std::unordered_map<const HeteroView *, VectorView<T>>   views_ {  };
+    std::unordered_map<
+        const HeteroView *, VectorView<T, A>,
+        std::hash<const HeteroView *>,
+        std::equal_to<const HeteroView *>,
+        typename allocator_declare<
+            std::pair<const HeteroView *const, VectorView<T, A>>, A>::type>
+        views_ {  };
 
-    std::function<void(HeteroView &)>   clear_function_ {
-        [](HeteroView &) { return; }
+    void(*clear_function_)(HeteroView &)  {
+        [](HeteroView &) -> void { return; }
     };
-    std::function<void(const HeteroView &, HeteroView &)>   copy_function_ {
-        [](const HeteroView &, HeteroView &)  { return; }
+    void(*copy_function_)(const HeteroView &, HeteroView &)  {
+        [](const HeteroView &, HeteroView &) -> void  { return; }
     };
-    std::function<void(HeteroView &, HeteroView &)> move_function_  {
-        [](HeteroView &, HeteroView &)  { return; }
+    void(*move_function_)(HeteroView &, HeteroView &)  {
+        [](HeteroView &, HeteroView &) -> void  { return; }
     };
 
     // Visitor stuff

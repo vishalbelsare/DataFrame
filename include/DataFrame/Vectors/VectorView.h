@@ -1,7 +1,7 @@
 // Hossein Moein
 // September 25, 2018
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,17 +30,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <iterator>
+#include <new>
+#include <utility>
 #include <vector>
-
-#if defined(_MSC_VER) && defined(HMDF_SHARED)
-#  ifdef LIBRARY_EXPORTS
-#    define LIBRARY_API __declspec(dllexport)
-#  else
-#    define LIBRARY_API __declspec(dllimport)
-#  endif // LIBRARY_EXPORTS
-#else
-#  define LIBRARY_API
-#endif // _MSC_VER
 
 // ----------------------------------------------------------------------------
 
@@ -51,18 +43,25 @@ namespace hmdf
 // continuous memory look like an STL vector.
 // It also gives you STL conformant iterators.
 //
-template <typename T>
-class LIBRARY_API   VectorView {
+template<typename T, std::size_t A = 0>
+class   VectorView {
 
 public:
 
+    static constexpr std::align_val_t   align_value { A };
+
     using value_type = T;
-    using size_type = unsigned long long int;
+    using size_type =
+        typename std::vector<
+            T, typename allocator_declare<T, A>::type>::size_type;
     using pointer = value_type *;
     using const_pointer = const value_type *;
     using const_pointer_const = const value_type *const;
     using reference = value_type &;
     using const_reference = const value_type &;
+    using difference_type =
+        typename std::vector<
+            T, typename allocator_declare<T, A>::type>::difference_type;
 
     static const size_type  value_size = sizeof(value_type);
 
@@ -92,29 +91,31 @@ public:
         end_ptr_ += 1;
     }
 
-    inline bool empty () const noexcept  { return (begin_ptr_ == end_ptr_); }
-    inline size_type size () const noexcept  {
+    [[nodiscard]] inline bool
+    empty () const noexcept  { return (begin_ptr_ == end_ptr_); }
+    [[nodiscard]] inline size_type size () const noexcept  {
 
         return (static_cast<size_type>(end_ptr_ - begin_ptr_));
     }
-    inline size_type capacity () const noexcept  { return (size()); }
+    [[nodiscard]] inline size_type
+    capacity () const noexcept  { return (size()); }
     inline void clear () noexcept  { begin_ptr_ = end_ptr_ = nullptr; }
 
-    inline reference at (size_type i) noexcept  { return (*(begin_ptr_ + i)); }
-    inline const_reference
+    [[nodiscard]] inline reference
+    at (size_type i) noexcept  { return (*(begin_ptr_ + i)); }
+    [[nodiscard]] inline const_reference
     at (size_type i) const noexcept  { return (*(begin_ptr_ + i)); }
-    inline reference operator [] (size_type i) noexcept  {
-
-        return (*(begin_ptr_ + i));
-    }
-    inline const_reference operator [] (size_type i) const noexcept  {
-
-        return (*(begin_ptr_ + i));
-    }
-    inline reference front() noexcept  { return (*begin_ptr_); }
-    inline const_reference front() const noexcept  { return (*begin_ptr_); }
-    inline reference back() noexcept  { return (*(end_ptr_ - 1)); }
-    inline const_reference back() const noexcept  { return (*(end_ptr_ - 1)); }
+    [[nodiscard]] inline reference
+    operator [] (size_type i) noexcept  { return (*(begin_ptr_ + i)); }
+    [[nodiscard]] inline const_reference
+    operator [] (size_type i) const noexcept  { return (*(begin_ptr_ + i)); }
+    [[nodiscard]] inline reference front() noexcept  { return (*begin_ptr_); }
+    [[nodiscard]] inline const_reference
+    front() const noexcept  { return (*begin_ptr_); }
+    [[nodiscard]] inline reference
+    back() noexcept  { return (*(end_ptr_ - 1)); }
+    [[nodiscard]] inline const_reference
+    back() const noexcept  { return (*(end_ptr_ - 1)); }
 
     // These are to match the std::vector interface, so things will compile
     //
@@ -130,37 +131,47 @@ public:
 
     VectorView &operator= (std::vector<T> &rhs)  {
 
-        VectorView  vw(&*(rhs.begin()), &*(rhs.end()));
-
-        swap(vw);
+        if (rhs.empty()) {
+            begin_ptr_ = nullptr;
+            end_ptr_ = nullptr;
+        }
+        else {
+            begin_ptr_ = rhs.data();
+            end_ptr_ = rhs.data() + rhs.size();
+        }
         return (*this);
     }
 
 public:
 
     class   iterator;
-    class   const_iterator  {
+    class   const_iterator : public std::random_access_iterator_tag  {
 
     public:
 
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
         using pointer = value_type *;
+        using const_pointer = const value_type *;
         using reference = value_type &;
-        using difference_type = long;
+        using const_reference = const value_type &;
+        using difference_type =
+            typename std::vector<
+                T, typename allocator_declare<T, A>::type>::difference_type;
 
     public:
 
-       // NOTE: The constructor with no argument initializes
-       //       the iterator to be the "end" iterator
-       //
-        inline const_iterator () = default;
-
         inline const_iterator (value_type const *const node) noexcept
             : node_ (node)  {   }
-
         inline const_iterator (const iterator &itr) noexcept
             : node_ (nullptr)  { *this = itr; }
+
+        const_iterator () = default;
+        ~const_iterator () = default;
+        const_iterator (const const_iterator &) = default;
+        const_iterator (const_iterator &&) = default;
+        const_iterator &operator = (const const_iterator &) = default;
+        const_iterator &operator = (const_iterator &&) = default;
 
         inline const_iterator &operator = (const iterator &rhs) noexcept  {
 
@@ -176,16 +187,31 @@ public:
 
             return (node_ != rhs.node_);
         }
+        inline bool operator > (const const_iterator &rhs) const noexcept  {
+
+            return (node_ > rhs.node_);
+        }
+        inline bool operator >= (const const_iterator &rhs) const noexcept  {
+
+            return (node_ >= rhs.node_);
+        }
+        inline bool operator < (const const_iterator &rhs) const noexcept  {
+
+            return (node_ < rhs.node_);
+        }
+        inline bool operator <= (const const_iterator &rhs) const noexcept  {
+
+            return (node_ <= rhs.node_);
+        }
 
        // Following STL style, this iterator appears as a pointer
        // to value_type.
        //
-        inline const_pointer operator -> () const noexcept  { return (node_); }
         inline const_reference operator * () const noexcept  {
 
             return (*node_);
         }
-        inline operator const_pointer () const noexcept  { return (node_); }
+        inline const_pointer operator -> () noexcept  { return (node_); }
 
        // ++Prefix
        //
@@ -205,7 +231,7 @@ public:
             return (const_iterator (ret_node));
         }
 
-        inline const_iterator &operator += (int step) noexcept  {
+        inline const_iterator &operator += (difference_type step) noexcept  {
 
             node_ += step;
             return (*this);
@@ -229,42 +255,40 @@ public:
             return (const_iterator (ret_node));
         }
 
-        inline const_iterator &operator -= (int step) noexcept  {
+        inline const_iterator &operator -= (difference_type step) noexcept  {
 
             node_ -= step;
             return (*this);
         }
 
-        inline const_iterator operator + (int step) noexcept  {
+        template<typename I>
+        inline const_iterator operator + (I step) const noexcept  {
 
             value_type  const  *ret_node = node_;
 
-            ret_node += step;
+            ret_node += static_cast<difference_type>(step);
             return (const_iterator (ret_node));
         }
 
-        inline const_iterator operator - (int step) noexcept  {
+        friend difference_type
+        operator - (const_iterator lhs, const_iterator rhs) noexcept  {
+
+            return (lhs.node_ - rhs.node_);
+        }
+
+        template<std::semiregular I>
+        inline const_iterator operator - (I step) const noexcept  {
 
             value_type  const  *ret_node = node_;
 
-            ret_node -= step;
+            ret_node -= static_cast<difference_type>(step);
             return (const_iterator (ret_node));
         }
 
-        inline const_iterator operator + (long step) noexcept  {
+        inline const_reference &
+        operator [](difference_type step) const noexcept  {
 
-            value_type  const  *ret_node = node_;
-
-            ret_node += step;
-            return (const_iterator (ret_node));
-        }
-
-        inline const_iterator operator - (long step) noexcept  {
-
-            value_type  const  *ret_node = node_;
-
-            ret_node -= step;
-            return (const_iterator (ret_node));
+            return (*(node_ + step));
         }
 
     private:
@@ -275,24 +299,30 @@ public:
    // This iterator contains only one pointer. Like STL iterators,
    // it is cheap to create and copy around.
    //
-    class   iterator  {
+    class   iterator : public std::random_access_iterator_tag  {
 
     public:
 
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
         using pointer = value_type *;
+        using const_pointer = const value_type *;
         using reference = value_type &;
-        using difference_type = long;
+        using const_reference = const value_type &;
+        using difference_type =
+            typename std::vector<
+                T, typename allocator_declare<T, A>::type>::difference_type;
 
     public:
 
-       // NOTE: The constructor with no argument initializes
-       //       the iterator to be the "end" iterator
-       //
-        inline iterator () = default;
-
         inline iterator (value_type *node) noexcept : node_ (node)  {  }
+
+        iterator () = default;
+        ~iterator () = default;
+        iterator (const iterator &) = default;
+        iterator (iterator &&) = default;
+        iterator &operator = (const iterator &) = default;
+        iterator &operator = (iterator &&) = default;
 
         inline bool operator == (const iterator &rhs) const noexcept  {
 
@@ -302,13 +332,28 @@ public:
 
             return (node_ != rhs.node_);
         }
+        inline bool operator > (const iterator &rhs) const noexcept  {
+
+            return (node_ > rhs.node_);
+        }
+        inline bool operator >= (const iterator &rhs) const noexcept  {
+
+            return (node_ >= rhs.node_);
+        }
+        inline bool operator < (const iterator &rhs) const noexcept  {
+
+            return (node_ < rhs.node_);
+        }
+        inline bool operator <= (const iterator &rhs) const noexcept  {
+
+            return (node_ <= rhs.node_);
+        }
 
        // Following STL style, this iterator appears as a pointer
        // to value_type.
        //
-        inline pointer operator -> () const noexcept  { return (node_); }
-        inline reference operator * () const noexcept  { return (*node_); }
-        inline operator pointer () const noexcept  { return (node_); }
+        inline reference operator * () const noexcept { return (*node_); }
+        inline pointer operator -> () noexcept { return (node_); }
 
        // We are following STL style iterator interface.
        //
@@ -325,7 +370,7 @@ public:
             return (iterator (ret_node));
         }
 
-        inline iterator &operator += (long step) noexcept  {
+        inline iterator &operator += (difference_type step) noexcept  {
 
             node_ += step;
             return (*this);
@@ -344,42 +389,45 @@ public:
             return (iterator (ret_node));
         }
 
-        inline iterator &operator -= (int step) noexcept  {
+        inline iterator &operator -= (difference_type step) noexcept  {
 
             node_ -= step;
             return (*this);
         }
 
-        inline iterator operator + (int step) noexcept  {
+        template<typename I>
+        inline iterator operator + (I step) const noexcept  {
 
-            value_type   *ret_node = node_;
+            value_type  *ret_node = node_;
 
-            ret_node += step;
+            ret_node += static_cast<difference_type>(step);
             return (iterator (ret_node));
         }
 
-        inline iterator operator - (int step) noexcept  {
+        friend difference_type
+        operator - (iterator lhs, iterator rhs) noexcept  {
 
-            value_type   *ret_node = node_;
+            return (lhs.node_ - rhs.node_);
+        }
 
-            ret_node -= step;
+        template<std::semiregular I>
+        inline iterator operator - (I step) const noexcept  {
+
+            value_type  *ret_node = node_;
+
+            ret_node -= static_cast<difference_type>(step);
             return (iterator (ret_node));
         }
 
-        inline iterator operator + (long step) noexcept  {
+        inline const_reference &
+        operator [](difference_type step) const noexcept  {
 
-            value_type   *ret_node = node_;
-
-            ret_node += step;
-            return (iterator (ret_node));
+            return (*(node_ + step));
         }
+        inline reference &
+        operator [](difference_type step) noexcept  {
 
-        inline iterator operator - (long step) noexcept  {
-
-            value_type   *ret_node = node_;
-
-            ret_node -= step;
-            return (iterator (ret_node));
+            return (*(node_ + step));
         }
 
     private:
@@ -389,21 +437,38 @@ public:
         friend class    VectorView::const_iterator;
     };
 
-    inline iterator begin () noexcept  { return (iterator (begin_ptr_)); }
-    inline iterator end () noexcept  { return (iterator (end_ptr_)); }
-    inline const_iterator
+    friend class    iterator;
+    friend class    const_iterator;
+
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+
+    [[nodiscard]] inline iterator
+    begin () noexcept  { return (iterator (begin_ptr_)); }
+    [[nodiscard]] inline iterator
+    end () noexcept  { return (iterator (end_ptr_)); }
+    [[nodiscard]] inline const_iterator
     begin () const noexcept  { return (const_iterator (begin_ptr_)); }
-    inline const_iterator
+    [[nodiscard]] inline const_iterator
     end () const noexcept  { return (const_iterator (end_ptr_)); }
 
-    inline std::reverse_iterator<iterator>
+    [[nodiscard]] inline reverse_iterator
     rbegin() noexcept { return (std::make_reverse_iterator(end())); }
-    inline std::reverse_iterator<iterator>
+    [[nodiscard]] inline reverse_iterator
     rend() noexcept { return (std::make_reverse_iterator(begin())); }
-    inline std::reverse_iterator<const_iterator>
+    [[nodiscard]] inline const_reverse_iterator
     rbegin() const noexcept { return (std::make_reverse_iterator(end())); }
-    inline std::reverse_iterator<const_iterator>
+    [[nodiscard]] inline const_reverse_iterator
     rend() const noexcept { return (std::make_reverse_iterator(begin())); }
+
+    [[nodiscard]] const_iterator
+    cbegin() const { return (const_iterator (begin_ptr_)); }
+    [[nodiscard]] const_iterator
+    cend() const { return (const_iterator (end_ptr_)); }
+    [[nodiscard]] const_reverse_iterator
+    crbegin() const { return (std::make_reverse_iterator(end())); }
+    [[nodiscard]] const_reverse_iterator
+    crend() const { return (std::make_reverse_iterator(begin())); }
 
 private:
 
@@ -413,18 +478,26 @@ private:
 
 // ----------------------------------------------------------------------------
 
-template <typename T>
-class LIBRARY_API   VectorConstView {
+template<typename T, std::size_t A = 0>
+class VectorConstView {
 
 public:
 
+    static constexpr std::align_val_t   align_value { A };
+
     using value_type = T;
-    using size_type = unsigned long long int;
+    using size_type =
+        typename std::vector<
+            T, typename allocator_declare<T, A>::type>::size_type;
     using pointer = const value_type *;
     using const_pointer = const value_type *;
     using const_pointer_const = const value_type *const;
     using reference = const value_type &;
     using const_reference = const value_type &;
+    using difference_type =
+        typename std::vector<
+            T, typename allocator_declare<T, A>::type>::difference_type;
+
 
     static const size_type  value_size = sizeof(value_type);
 
@@ -448,28 +521,30 @@ public:
     //        VectorView vv;
     //        vv.set_begin_end_special(&(*v.begin()), &(v.back()));
     //
-    inline void set_begin_end_special(value_type *bp, value_type *ep_1)  {
+    inline void
+    set_begin_end_special(const value_type *bp, const value_type *ep_1)  {
 
         begin_ptr_ = bp;
         end_ptr_ = ep_1;
         end_ptr_ += 1;
     }
 
-    inline bool empty () const noexcept  { return (begin_ptr_ == end_ptr_); }
-    inline size_type size () const noexcept  {
+    [[nodiscard]] inline bool
+    empty () const noexcept  { return (begin_ptr_ == end_ptr_); }
+    [[nodiscard]] inline size_type size () const noexcept  {
 
         return (static_cast<size_type>(end_ptr_ - begin_ptr_));
     }
     inline void clear () noexcept  { begin_ptr_ = end_ptr_ = nullptr; }
 
-    inline const_reference
+    [[nodiscard]] inline const_reference
     at (size_type i) const noexcept  { return (*(begin_ptr_ + i)); }
-    inline const_reference operator [] (size_type i) const noexcept  {
-
-        return (*(begin_ptr_ + i));
-    }
-    inline const_reference front() const noexcept  { return (*begin_ptr_); }
-    inline const_reference back() const noexcept  { return (*(end_ptr_ - 1)); }
+    [[nodiscard]] inline const_reference
+    operator [] (size_type i) const noexcept  { return (*(begin_ptr_ + i)); }
+    [[nodiscard]] inline const_reference
+    front() const noexcept  { return (*begin_ptr_); }
+    [[nodiscard]] inline const_reference
+    back() const noexcept  { return (*(end_ptr_ - 1)); }
 
     // These are to match the std::vector interface, so things will compile
     //
@@ -485,33 +560,44 @@ public:
 
     VectorConstView &operator= (const std::vector<T> &rhs)  {
 
-        VectorConstView  vw(&*(rhs.begin()), &*(rhs.end()));
-
-        swap(vw);
+        if (rhs.empty()) {
+            begin_ptr_ = nullptr;
+            end_ptr_ = nullptr;
+        }
+        else {
+            begin_ptr_ = rhs.data();
+            end_ptr_ = rhs.data() + rhs.size();
+        }
         return (*this);
     }
 
 public:
 
-    class   const_iterator  {
+    class   const_iterator : public std::random_access_iterator_tag  {
 
     public:
 
         using iterator_category = std::random_access_iterator_tag;
         using value_type = T;
         using pointer = value_type *;
+        using const_pointer = const value_type *;
         using reference = value_type &;
-        using difference_type = long;
+        using const_reference = const value_type &;
+        using difference_type =
+            typename std::vector<
+                T, typename allocator_declare<T, A>::type>::difference_type;
 
     public:
 
-       // NOTE: The constructor with no argument initializes
-       //       the iterator to be the "end" iterator
-       //
-        inline const_iterator () = default;
-
         inline const_iterator (value_type const *const node) noexcept
             : node_ (node)  {   }
+
+        const_iterator () = default;
+        ~const_iterator () = default;
+        const_iterator (const const_iterator &) = default;
+        const_iterator (const_iterator &&) = default;
+        const_iterator &operator = (const const_iterator &) = default;
+        const_iterator &operator = (const_iterator &&) = default;
 
         inline bool operator == (const const_iterator &rhs) const noexcept  {
 
@@ -521,16 +607,31 @@ public:
 
             return (node_ != rhs.node_);
         }
+        inline bool operator > (const const_iterator &rhs) const noexcept  {
+
+            return (node_ > rhs.node_);
+        }
+        inline bool operator >= (const const_iterator &rhs) const noexcept  {
+
+            return (node_ >= rhs.node_);
+        }
+        inline bool operator < (const const_iterator &rhs) const noexcept  {
+
+            return (node_ < rhs.node_);
+        }
+        inline bool operator <= (const const_iterator &rhs) const noexcept  {
+
+            return (node_ <= rhs.node_);
+        }
 
        // Following STL style, this iterator appears as a pointer
        // to value_type.
        //
-        inline const_pointer operator -> () const noexcept  { return (node_); }
         inline const_reference operator * () const noexcept  {
 
             return (*node_);
         }
-        inline operator const_pointer () const noexcept  { return (node_); }
+        inline const_pointer operator -> () noexcept  { return (node_); }
 
        // ++Prefix
        //
@@ -550,7 +651,7 @@ public:
             return (const_iterator (ret_node));
         }
 
-        inline const_iterator &operator += (int step) noexcept  {
+        inline const_iterator &operator += (difference_type step) noexcept  {
 
             node_ += step;
             return (*this);
@@ -574,42 +675,40 @@ public:
             return (const_iterator (ret_node));
         }
 
-        inline const_iterator &operator -= (int step) noexcept  {
+        inline const_iterator &operator -= (difference_type step) noexcept  {
 
             node_ -= step;
             return (*this);
         }
 
-        inline const_iterator operator + (int step) noexcept  {
+        template<typename I>
+        inline const_iterator operator + (I step) const noexcept  {
 
             value_type  const  *ret_node = node_;
 
-            ret_node += step;
+            ret_node += static_cast<difference_type>(step);
             return (const_iterator (ret_node));
         }
 
-        inline const_iterator operator - (int step) noexcept  {
+        friend difference_type
+        operator - (const_iterator lhs, const_iterator rhs) noexcept  {
+
+            return (lhs.node_ - rhs.node_);
+        }
+
+        template<std::semiregular I>
+        inline const_iterator operator - (I step) const noexcept  {
 
             value_type  const  *ret_node = node_;
 
-            ret_node -= step;
+            ret_node -= static_cast<difference_type>(step);
             return (const_iterator (ret_node));
         }
 
-        inline const_iterator operator + (long step) noexcept  {
+        inline const_reference &
+        operator [](difference_type step) const noexcept  {
 
-            value_type  const  *ret_node = node_;
-
-            ret_node += step;
-            return (const_iterator (ret_node));
-        }
-
-        inline const_iterator operator - (long step) noexcept  {
-
-            value_type  const  *ret_node = node_;
-
-            ret_node -= step;
-            return (const_iterator (ret_node));
+            return (*(node_ + step));
         }
 
     private:
@@ -617,15 +716,29 @@ public:
         const_pointer   node_ { nullptr };
     };
 
-    inline const_iterator
+    using reverse_iterator = std::reverse_iterator<const_iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+
+    friend class    const_iterator;
+
+    [[nodiscard]] inline const_iterator
     begin () const noexcept  { return (const_iterator (begin_ptr_)); }
-    inline const_iterator
+    [[nodiscard]] inline const_iterator
     end () const noexcept  { return (const_iterator (end_ptr_)); }
 
-    inline std::reverse_iterator<const_iterator>
+    [[nodiscard]] inline const_reverse_iterator
     rbegin() const noexcept { return (std::make_reverse_iterator(end())); }
-    inline std::reverse_iterator<const_iterator>
+    [[nodiscard]] inline const_reverse_iterator
     rend() const noexcept { return (std::make_reverse_iterator(begin())); }
+
+    [[nodiscard]] const_iterator
+    cbegin() const { return (const_iterator (begin_ptr_)); }
+    [[nodiscard]] const_iterator
+    cend() const { return (const_iterator (end_ptr_)); }
+    [[nodiscard]] const_reverse_iterator
+    crbegin() const { return (std::make_reverse_iterator(end())); }
+    [[nodiscard]] const_reverse_iterator
+    crend() const { return (std::make_reverse_iterator(begin())); }
 
 private:
 

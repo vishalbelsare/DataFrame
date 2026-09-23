@@ -1,7 +1,7 @@
 // Hossein Moein
 // December 27, 2018
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -29,9 +29,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <DataFrame/DataFrame.h>
 
-#include <algorithm>
-#include <iterator>
-
 // ----------------------------------------------------------------------------
 
 namespace hmdf
@@ -41,46 +38,50 @@ template<typename I, typename H>
 template<typename ... Ts>
 void DataFrame<I, H>::self_shift(size_type periods, shift_policy sp)  {
 
-    static_assert(std::is_base_of<HeteroVector, DataVec>::value,
+    static_assert(std::is_base_of<HeteroVector<align_value>, DataVec>::value,
                   "Only a StdDataFrame can call self_shift()");
 
-    if (periods > 0)  {
-        if (sp == shift_policy::down || sp == shift_policy::up)  {
+    if (periods > 0) [[likely]] {
+        if (sp == shift_policy::down || sp == shift_policy::up) [[likely]]  {
             vertical_shift_functor_<Ts ...> functor(periods, sp);
-            std::vector<std::future<void>>  futures(get_thread_level());
-            size_type                       thread_count = 0;
-            const size_type                 data_size = data_.size();
+            const size_type                 num_cols = data_.size();
+            const auto                      thread_level =
+                (indices_.size() < ThreadPool::MUL_THR_THHOLD)
+                    ? 0L : get_thread_level();
+            const SpinGuard                 guard(lock_);
 
-            for (size_type idx = 0; idx < data_size; ++idx)  {
-                const SpinGuard guard(lock_);
+            if (thread_level > 2)  {
+                auto    lbd =
+                    [&functor, this](auto begin, auto end) -> void  {
+                        for (size_type idx = begin; idx < end; ++idx)
+                            this->data_[idx].change(functor);
+                    };
+                auto    futuers =
+                    thr_pool_.parallel_loop<double>(
+                        size_type(0), num_cols, std::move(lbd));
 
-                if (thread_count >= get_thread_level())
+                for (auto &fut : futuers)  fut.get();
+            }
+            else  {
+                for (size_type idx = 0; idx < num_cols; ++idx) [[likely]]
                     data_[idx].change(functor);
-                else  {
-                    auto    to_be_called =
-                        static_cast
-                        <void(DataVec::*)(vertical_shift_functor_<Ts ...> &&)>
-                            (&DataVec::template
-                                 change<vertical_shift_functor_<Ts ...>>);
+            }
+        }
+        else  {
+            while (periods-- > 0)  {
+                const char                      *col_name =
+                    (sp == shift_policy::left)
+                        ? column_list_.front().first.c_str()
+                        : column_list_.back().first.c_str();
+                remove_column_functor_<Ts ...>  functor (col_name, *this);
 
-                    futures[thread_count] =
-                        std::async(std::launch::async,
-                                   to_be_called,
-                                   &(data_[idx]),
-                                   std::move(functor));
-                    thread_count += 1;
+                for (const auto &[name, idx] : column_list_) [[likely]]  {
+                    if (name == col_name)  {
+                        data_[idx].change(functor);
+                        break;
+                    }
                 }
             }
-            for (size_type idx = 0; idx < thread_count; ++idx)
-                futures[idx].get();
-        }
-        else if (sp == shift_policy::left)  {
-            while (periods-- > 0)
-                remove_column(column_list_.front().first.c_str());
-        }
-        else if (sp == shift_policy::right)  {
-            while (periods-- > 0)
-                remove_column(column_list_.back().first.c_str());
         }
     }
 }
@@ -89,13 +90,13 @@ void DataFrame<I, H>::self_shift(size_type periods, shift_policy sp)  {
 
 template<typename I, typename H>
 template<typename ... Ts>
-StdDataFrame<I> DataFrame<I, H>::
+DataFrame<I, H> DataFrame<I, H>::
 shift(size_type periods, shift_policy sp) const  {
 
-    static_assert(std::is_base_of<HeteroVector, DataVec>::value,
+    static_assert(std::is_base_of<HeteroVector<align_value>, DataVec>::value,
                   "Only a StdDataFrame can call shift()");
 
-    StdDataFrame<IndexType> slug = *this;
+    DataFrame   slug = *this;
 
     slug.template self_shift<Ts ...>(periods, sp);
     return (slug);
@@ -105,13 +106,13 @@ shift(size_type periods, shift_policy sp) const  {
 
 template<typename I, typename H>
 template<typename T>
-std::vector<T> DataFrame<I, H>::
+typename DataFrame<I, H>::template StlVecType<T> DataFrame<I, H>::
 shift(const char *col_name, size_type periods, shift_policy sp) const  {
 
-    static_assert(std::is_base_of<HeteroVector, DataVec>::value,
+    static_assert(std::is_base_of<HeteroVector<align_value>, DataVec>::value,
                   "Only a StdDataFrame can call shift()");
 
-    std::vector<T>              result = get_column<T>(col_name);
+    ColumnVecType<T>            result = get_column<T>(col_name);
     vertical_shift_functor_<T>  functor(periods, sp);
 
     functor (result);
@@ -124,37 +125,20 @@ template<typename I, typename H>
 template<typename ... Ts>
 void DataFrame<I, H>::self_rotate(size_type periods, shift_policy sp)  {
 
-    static_assert(std::is_base_of<HeteroVector, DataVec>::value,
+    static_assert(std::is_base_of<HeteroVector<align_value>, DataVec>::value,
                   "Only a StdDataFrame can call self_rotate()");
 
     if (periods > 0)  {
-        if (sp == shift_policy::down || sp == shift_policy::up)  {
-            rotate_functor_<Ts ...>         functor(periods, sp);
-            std::vector<std::future<void>>  futures(get_thread_level());
-            size_type                       thread_count = 0;
-            const size_type                 data_size = data_.size();
+        if (sp == shift_policy::down || sp == shift_policy::up) [[likely]]  {
+            rotate_functor_<Ts ...> functor(periods, sp);
+            const size_type         num_cols = data_.size();
 
-            for (size_type idx = 0; idx < data_size; ++idx)  {
+            {
                 const SpinGuard guard(lock_);
 
-                if (thread_count >= get_thread_level())
+                for (size_type idx = 0; idx < num_cols; ++idx) [[likely]]
                     data_[idx].change(functor);
-                else  {
-                    auto    to_be_called =
-                        static_cast
-                            <void(H::*)(rotate_functor_<Ts ...> &&)>
-                                (&H::template change<rotate_functor_<Ts ...>>);
-
-                    futures[thread_count] =
-                        std::async(std::launch::async,
-                                   to_be_called,
-                                   &(data_[idx]),
-                                   std::move(functor));
-                    thread_count += 1;
-                }
             }
-            for (size_type idx = 0; idx < thread_count; ++idx)
-                futures[idx].get();
         }
         else if (sp == shift_policy::left)  {
             std::rotate(column_list_.begin(),
@@ -173,13 +157,13 @@ void DataFrame<I, H>::self_rotate(size_type periods, shift_policy sp)  {
 
 template<typename I, typename H>
 template<typename ... Ts>
-StdDataFrame<I> DataFrame<I, H>::
+DataFrame<I, H> DataFrame<I, H>::
 rotate(size_type periods, shift_policy sp) const  {
 
-    static_assert(std::is_base_of<HeteroVector, DataVec>::value,
+    static_assert(std::is_base_of<HeteroVector<align_value>, DataVec>::value,
                   "Only a StdDataFrame can call rotate()");
 
-    StdDataFrame<IndexType> slug = *this;
+    DataFrame<IndexType, H> slug = *this;
 
     slug.template self_rotate<Ts ...>(periods, sp);
     return (slug);

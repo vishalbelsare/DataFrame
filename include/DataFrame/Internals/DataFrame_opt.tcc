@@ -1,7 +1,7 @@
 // Hossein Moein
 // September 25, 2017
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@ namespace hmdf
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename ... Ts>
 bool DataFrame<I, H>::is_equal (const DataFrame &rhs) const  {
 
@@ -45,13 +45,14 @@ bool DataFrame<I, H>::is_equal (const DataFrame &rhs) const  {
     if (indices_ != rhs.indices_)
         return (false);
 
-    for (const auto &iter : column_list_)  {
-        auto    rhs_citer = rhs.column_tb_.find(iter.first);
+    const SpinGuard guard(lock_);
+
+    for (const auto &[name, idx] : column_list_) [[likely]]  {
+        const auto  rhs_citer = rhs.column_tb_.find(name);
 
         if (rhs_citer == rhs.column_tb_.end())  return (false);
 
-        equal_functor_<Ts ...>   functor (iter.first.c_str(), *this);
-        const SpinGuard          guard(lock_);
+        equal_functor_<Ts ...>   functor (name.c_str(), *this);
 
         rhs.data_[rhs_citer->second].change(functor);
         if (! functor.result)
@@ -63,10 +64,13 @@ bool DataFrame<I, H>::is_equal (const DataFrame &rhs) const  {
 
 // ----------------------------------------------------------------------------
 
-template<typename I, typename  H>
+template<typename I, typename H>
 template<typename ... Ts>
 DataFrame<I, H> &DataFrame<I, H>::
 modify_by_idx (DataFrame &rhs, sort_state already_sorted)  {
+
+    static_assert(std::is_base_of<HeteroVector<align_value>, H>::value,
+                  "Only a StdDataFrame can call modify_by_idx()");
 
     if (already_sorted == sort_state::not_sorted)  {
         rhs.sort<IndexType, Ts ...>(DF_INDEX_COL_NAME, sort_spec::ascen);
@@ -75,21 +79,21 @@ modify_by_idx (DataFrame &rhs, sort_state already_sorted)  {
 
     const size_type lhs_s { indices_.size() };
     const size_type rhs_s { rhs.indices_.size() };
+    const SpinGuard guard(lock_);
 
     for (size_type lhs_i = 0, rhs_i = 0;
-         lhs_i < lhs_s && rhs_i < rhs_s; ++rhs_i)  {
+         lhs_i < lhs_s && rhs_i < rhs_s; ++rhs_i) [[likely]]  {
         while (indices_[lhs_i] < rhs.indices_[rhs_i] && lhs_i < lhs_s)
             lhs_i += 1;
 
         if (indices_[lhs_i] == rhs.indices_[rhs_i])  {
-            for (auto &iter : column_list_)  {
-                mod_by_idx_functor_<Ts ...>  functor (iter.first.c_str(),
+            for (const auto &[name, idx] : column_list_) [[likely]]  {
+                mod_by_idx_functor_<Ts ...>  functor (name.c_str(),
                                                       rhs,
                                                       lhs_i,
                                                       rhs_i);
-                const SpinGuard              guard(lock_);
 
-                data_[iter.second].change(functor);
+                data_[idx].change(functor);
             }
 
             lhs_i += 1;

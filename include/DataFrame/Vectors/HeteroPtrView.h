@@ -1,7 +1,7 @@
 // Hossein Moein
 // June 24, 2019
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -32,6 +32,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <DataFrame/Vectors/VectorPtrView.h>
 
 #include <functional>
+#include <new>
+#include <type_traits>
 #include <unordered_map>
 
 // ----------------------------------------------------------------------------
@@ -39,11 +41,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace hmdf
 {
 
-struct LIBRARY_API  HeteroPtrView {
+template<std::size_t A = 0>
+struct HeteroPtrView {
 
-    using size_type = size_t;
+    static constexpr std::align_val_t   align_value { A };
 
-    HeteroPtrView() = default;
+    using size_type = std::size_t;
+
+    HeteroPtrView();
     template<typename T>
     HeteroPtrView(T *begin_ptr, T *end_ptr);
 
@@ -58,11 +63,13 @@ struct LIBRARY_API  HeteroPtrView {
     //
     template<typename T>
     void set_begin_end_special(T *bp, T *ep_1);
+    template<typename T>
+    void set_empty_vec();
 
     template<typename T>
-    HeteroPtrView(VectorPtrView<T> &vec);
+    HeteroPtrView(VectorPtrView<T, A> &vec);
     template<typename T>
-    HeteroPtrView(VectorPtrView<T> &&vec);
+    HeteroPtrView(VectorPtrView<T, A> &&vec);
     HeteroPtrView(const HeteroPtrView &that);
     HeteroPtrView(HeteroPtrView &&that);
 
@@ -72,9 +79,9 @@ struct LIBRARY_API  HeteroPtrView {
     HeteroPtrView &operator= (HeteroPtrView &&rhs);
 
     template<typename T>
-    VectorPtrView<T> &get_vector();
+    [[nodiscard]] VectorPtrView<T, A> &get_vector();
     template<typename T>
-    const VectorPtrView<T> &get_vector() const;
+    [[nodiscard]] const VectorPtrView<T, A> &get_vector() const;
 
     template<typename T>
     void reserve (size_type r)  { get_vector<T>().reserve (r); }
@@ -82,28 +89,27 @@ struct LIBRARY_API  HeteroPtrView {
     void shrink_to_fit () { get_vector<T>().shrink_to_fit (); }
 
     template<typename T>
-    typename VectorPtrView<T>::
-    size_type size () const { return (get_vector<T>().size()); }
+    [[nodiscard]] size_type size () const { return (get_vector<T>().size()); }
 
     void clear();
 
     template<typename T>
-    bool empty() const noexcept;
+    [[nodiscard]] bool empty() const noexcept;
 
     template<typename T>
     T &at(size_type idx);
     template<typename T>
-    const T &at(size_type idx) const;
+    [[nodiscard]] const T &at(size_type idx) const;
 
     template<typename T>
-    T &back();
+    [[nodiscard]] T &back();
     template<typename T>
-    const T &back() const;
+    [[nodiscard]] const T &back() const;
 
     template<typename T>
-    T &front();
+    [[nodiscard]] T &front();
     template<typename T>
-    const T &front() const;
+    [[nodiscard]] const T &front() const;
 
     template<typename... Ts>
     struct type_list  {   };
@@ -140,21 +146,25 @@ struct LIBRARY_API  HeteroPtrView {
 private:
 
     template<typename T>
-    inline static std::unordered_map<const HeteroPtrView *, VectorPtrView<T>>
+    inline static
+    std::unordered_map<
+        const HeteroPtrView *, VectorPtrView<T, A>,
+        std::hash<const HeteroPtrView *>,
+        std::equal_to<const HeteroPtrView *>,
+        typename allocator_declare<
+            std::pair<const HeteroPtrView *const,
+                      VectorPtrView<T, A>>, A>::type>
         views_ {  };
 
-    std::function<void(HeteroPtrView &)>
-        clear_function_ {
-            [](HeteroPtrView &) { return; }
-        };
-    std::function<void(const HeteroPtrView &, HeteroPtrView &)>
-        copy_function_ {
-            [](const HeteroPtrView &, HeteroPtrView &)  { return; }
-        };
-    std::function<void(HeteroPtrView &, HeteroPtrView &)>
-        move_function_  {
-            [](HeteroPtrView &, HeteroPtrView &)  { return; }
-        };
+    void(*clear_function_)(HeteroPtrView &) {
+        [](HeteroPtrView &) -> void  { return; }
+    };
+    void(*copy_function_)(const HeteroPtrView &, HeteroPtrView &) {
+        [](const HeteroPtrView &, HeteroPtrView &) -> void  { return; }
+    };
+    void(*move_function_)(HeteroPtrView &, HeteroPtrView &) {
+        [](HeteroPtrView &, HeteroPtrView &) -> void  { return; }
+    };
 
     // Visitor stuff
     //

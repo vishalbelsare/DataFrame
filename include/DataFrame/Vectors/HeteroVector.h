@@ -1,7 +1,7 @@
 // Hossein Moein
 // September 11, 2017
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -29,10 +29,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include <DataFrame/Utils/AlignedAllocator.h>
+#include <DataFrame/Vectors/HeteroConstPtrView.h>
+#include <DataFrame/Vectors/HeteroConstView.h>
 #include <DataFrame/Vectors/HeteroPtrView.h>
 #include <DataFrame/Vectors/HeteroView.h>
 
+#include <functional>
+#include <new>
+#include <type_traits>
 #include <unordered_map>
+#include <vector>
 
 // ----------------------------------------------------------------------------
 
@@ -43,9 +50,12 @@ namespace hmdf
 // are partly inspired by Andy G's Blog at:
 // https://gieseanw.wordpress.com/2017/05/03/a-true-heterogeneous-container/
 //
-struct  HeteroVector  {
+template<std::size_t A = 0>
+struct HeteroVector  {
 
-    using size_type = size_t;
+    static constexpr std::align_val_t   align_value { A };
+
+    using size_type = std::size_t;
 
     HeteroVector();
     HeteroVector(const HeteroVector &that);
@@ -57,9 +67,12 @@ struct  HeteroVector  {
     HeteroVector &operator= (HeteroVector &&rhs);
 
     template<typename T>
-    std::vector<T> &get_vector();
+    [[nodiscard]] std::vector<T, typename allocator_declare<T, A>::type> &
+    get_vector();
     template<typename T>
-    const std::vector<T> &get_vector() const;
+    [[nodiscard]]
+    const std::vector<T, typename allocator_declare<T, A>::type> &
+    get_vector() const;
 
     // It returns a view of the underlying vector.
     // NOTE: One can modify the vector through the view. But the vector
@@ -67,10 +80,18 @@ struct  HeteroVector  {
     // There is no const version of this method
     //
     template<typename T>
-    HeteroView get_view(size_type begin = 0, size_type end = -1);
+    [[nodiscard]] HeteroView<A>
+    get_view(size_type begin = 0, size_type end = -1);
+    template<typename T>
+    [[nodiscard]] HeteroConstView<A>
+    get_view(size_type begin = 0, size_type end = -1) const;
 
     template<typename T>
-    HeteroPtrView get_ptr_view(size_type begin = 0, size_type end = -1);
+    [[nodiscard]] HeteroPtrView<A>
+    get_ptr_view(size_type begin = 0, size_type end = -1);
+    template<typename T>
+    [[nodiscard]] HeteroConstPtrView<A>
+    get_ptr_view(size_type begin = 0, size_type end = -1) const;
 
     template<typename T>
     void push_back(const T &v);
@@ -85,7 +106,7 @@ struct  HeteroVector  {
     void shrink_to_fit () { get_vector<T>().shrink_to_fit (); }
 
     template<typename T>
-    size_type size () const { return (get_vector<T>().size()); }
+    [[nodiscard]] size_type size () const { return (get_vector<T>().size()); }
 
     void clear();
 
@@ -101,32 +122,45 @@ struct  HeteroVector  {
     void pop_back();
 
     template<typename T>
-    bool empty() const noexcept;
+    [[nodiscard]] bool empty() const noexcept;
 
     template<typename T>
-    T &at(size_type idx);
+    [[nodiscard]] T &at(size_type idx);
     template<typename T>
-    const T &at(size_type idx) const;
+    [[nodiscard]] const T &at(size_type idx) const;
 
     template<typename T>
-    T &back();
+    [[nodiscard]] T &back();
     template<typename T>
-    const T &back() const;
+    [[nodiscard]] const T &back() const;
 
     template<typename T>
-    T &front();
+    [[nodiscard]] T &front();
     template<typename T>
-    const T &front() const;
+    [[nodiscard]] const T &front() const;
 
     template<typename T>
-    using iterator = typename std::vector<T>::iterator;
+    using iterator =
+        typename
+            std::vector<T, typename allocator_declare<T, A>::type>::iterator;
     template<typename T>
-    using const_iterator = typename std::vector<T>::const_iterator;
+    using const_iterator =
+        typename
+            std::vector<
+                T,
+                typename allocator_declare<T, A>::type>::const_iterator;
     template<typename T>
-    using reverse_iterator = typename std::vector<T>::reverse_iterator;
+    using reverse_iterator =
+        typename
+            std::vector<
+                T,
+                typename allocator_declare<T, A>::type >::reverse_iterator;
     template<typename T>
     using const_reverse_iterator =
-        typename std::vector<T>::const_reverse_iterator;
+        typename
+            std::vector<
+                T,
+                typename allocator_declare<T, A>::type>::const_reverse_iterator;
 
     template<typename T>
     inline iterator<T>
@@ -166,6 +200,11 @@ struct  HeteroVector  {
     template<typename... Ts>
     struct visitor_base  { using types = type_list<Ts ...>; };
 
+    template <typename... Ts>
+    struct visitor_base<std::tuple<Ts...>> {
+        using types = type_list<Ts ...>;
+    };
+
     template<typename T>
     void visit (T &&visitor)  {
 
@@ -195,14 +234,22 @@ struct  HeteroVector  {
 private:
 
     template<typename T>
-    inline static std::unordered_map<const HeteroVector *, std::vector<T>>
+    using vec_t = std::vector<T, typename allocator_declare<T, A>::type>;
+
+    template<typename T>
+    inline static
+    std::unordered_map<
+        const HeteroVector *, vec_t<T>,
+        std::hash<const HeteroVector *>,
+        std::equal_to<const HeteroVector *>,
+        typename allocator_declare<
+            std::pair<const HeteroVector *const, vec_t<T>>, A>::type>
         vectors_ {  };
 
-    std::vector<std::function<void(HeteroVector &)>>    clear_functions_;
-    std::vector<std::function<void(const HeteroVector &,
-                                   HeteroVector &)>>    copy_functions_;
-    std::vector<std::function<void(HeteroVector &,
-                                   HeteroVector &)>>    move_functions_;
+    std::vector<void(*)(HeteroVector &)>                    clear_functions_;
+    std::vector<void(*)(const HeteroVector &,
+                        HeteroVector &)>                    copy_functions_;
+    std::vector<void(*)(HeteroVector &, HeteroVector &)>    move_functions_;
 
     // Visitor stuff
     //

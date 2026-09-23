@@ -1,7 +1,7 @@
 // Hossein Moein
 // July 22, 2019
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -29,18 +29,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <DataFrame/RandGen.h>
 
-#include <cmath>
-#include <functional>
-#include <random>
-#include <type_traits>
 
 // ----------------------------------------------------------------------------
 
 namespace hmdf
 {
 
-template<typename T, typename D>
-static inline std::vector<T>
+template<typename T, typename D, std::size_t A>
+static inline std::vector<T, typename allocator_declare<T, A>::type>
 _gen_rand_(std::size_t n, const RandGenParams<T> &params, D &&dist)  {
 
     std::random_device  rd;
@@ -48,7 +44,7 @@ _gen_rand_(std::size_t n, const RandGenParams<T> &params, D &&dist)  {
 
     if (params.seed != static_cast<unsigned int>(-1))  gen.seed(params.seed);
 
-    std::vector<T>  result(n);
+    std::vector<T, typename allocator_declare<T, A>::type>   result(n);
 
     for (auto iter = result.begin(); iter < result.end(); ++iter)
         *iter = dist(gen);
@@ -57,8 +53,8 @@ _gen_rand_(std::size_t n, const RandGenParams<T> &params, D &&dist)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_uniform_int_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     static_assert(std::is_same<char, T>::value ||
@@ -75,7 +71,7 @@ gen_uniform_int_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     using D = std::uniform_int_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::uniform_int_distribution<T>(params.min_value,
                                                  params.max_value)));
@@ -83,8 +79,8 @@ gen_uniform_int_dist(std::size_t n, const RandGenParams<T> &params)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_uniform_real_dist(std::size_t n, const RandGenParams<T> &params) {
 
     static_assert(std::is_same<float, T>::value ||
@@ -94,7 +90,7 @@ gen_uniform_real_dist(std::size_t n, const RandGenParams<T> &params) {
 
     using D = std::uniform_real_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::uniform_real_distribution<T>(params.min_value,
                                                   params.max_value)));
@@ -102,20 +98,21 @@ gen_uniform_real_dist(std::size_t n, const RandGenParams<T> &params) {
 
 // ----------------------------------------------------------------------------
 
-std::vector<bool>
+template<std::size_t A>
+std::vector<bool, typename allocator_declare<bool, A>::type>
 gen_bernoulli_dist(std::size_t n, const RandGenParams<bool> &params) {
 
     using D = std::bernoulli_distribution;
 
-    return (_gen_rand_<bool, D>(
+    return (_gen_rand_<bool, D, A>(
                 n, params,
                 std::bernoulli_distribution(params.prob_true)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_binomial_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     static_assert(std::is_same<char, T>::value ||
@@ -132,7 +129,7 @@ gen_binomial_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     using D = std::binomial_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::binomial_distribution<T>(static_cast<T>(params.t_dist),
                                               params.prob_true)));
@@ -140,8 +137,8 @@ gen_binomial_dist(std::size_t n, const RandGenParams<T> &params)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_negative_binomial_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     static_assert(std::is_same<char, T>::value ||
@@ -158,7 +155,7 @@ gen_negative_binomial_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     using D = std::negative_binomial_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::negative_binomial_distribution<T>
                     (static_cast<T>(params.t_dist), params.prob_true)));
@@ -166,8 +163,8 @@ gen_negative_binomial_dist(std::size_t n, const RandGenParams<T> &params)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_geometric_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     static_assert(std::is_same<char, T>::value ||
@@ -184,15 +181,15 @@ gen_geometric_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     using D = std::geometric_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::geometric_distribution<T>(params.prob_true)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_poisson_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     static_assert(std::is_same<char, T>::value ||
@@ -209,15 +206,15 @@ gen_poisson_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     using D = std::poisson_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::poisson_distribution<T>(params.mean)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_exponential_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     static_assert(std::is_same<float, T>::value ||
@@ -227,15 +224,15 @@ gen_exponential_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     using D = std::exponential_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::exponential_distribution<T>(params.lambda)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_gamma_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     static_assert(std::is_same<float, T>::value ||
@@ -245,15 +242,15 @@ gen_gamma_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     using D = std::gamma_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::gamma_distribution<T>(params.alpha, params.beta)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_weibull_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     static_assert(std::is_same<float, T>::value ||
@@ -263,15 +260,15 @@ gen_weibull_dist(std::size_t n, const RandGenParams<T> &params)  {
 
     using D = std::weibull_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::weibull_distribution<T>(params.alpha, params.beta)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_extreme_value_dist(std::size_t n, const RandGenParams<T> &params) {
 
     static_assert(std::is_same<float, T>::value ||
@@ -281,15 +278,15 @@ gen_extreme_value_dist(std::size_t n, const RandGenParams<T> &params) {
 
     using D = std::extreme_value_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::extreme_value_distribution<T>(params.alpha, params.beta)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_normal_dist(std::size_t n, const RandGenParams<T> &params) {
 
     static_assert(std::is_same<float, T>::value ||
@@ -299,15 +296,15 @@ gen_normal_dist(std::size_t n, const RandGenParams<T> &params) {
 
     using D = std::normal_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::normal_distribution<T>(params.mean, params.std)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_lognormal_dist(std::size_t n, const RandGenParams<T> &params) {
 
     static_assert(std::is_same<float, T>::value ||
@@ -317,15 +314,15 @@ gen_lognormal_dist(std::size_t n, const RandGenParams<T> &params) {
 
     using D = std::lognormal_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::lognormal_distribution<T>(params.m, params.s)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_chi_squared_dist(std::size_t n, const RandGenParams<T> &params) {
 
     static_assert(std::is_same<float, T>::value ||
@@ -335,15 +332,15 @@ gen_chi_squared_dist(std::size_t n, const RandGenParams<T> &params) {
 
     using D = std::chi_squared_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::chi_squared_distribution<T>(params.n)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_cauchy_dist(std::size_t n, const RandGenParams<T> &params) {
 
     static_assert(std::is_same<float, T>::value ||
@@ -353,15 +350,15 @@ gen_cauchy_dist(std::size_t n, const RandGenParams<T> &params) {
 
     using D = std::cauchy_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::cauchy_distribution<T>(params.alpha, params.beta)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_fisher_f_dist(std::size_t n, const RandGenParams<T> &params) {
 
     static_assert(std::is_same<float, T>::value ||
@@ -371,15 +368,15 @@ gen_fisher_f_dist(std::size_t n, const RandGenParams<T> &params) {
 
     using D = std::fisher_f_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::fisher_f_distribution<T>(params.n, params.n2)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_student_t_dist(std::size_t n, const RandGenParams<T> &params) {
 
     static_assert(std::is_same<float, T>::value ||
@@ -389,20 +386,21 @@ gen_student_t_dist(std::size_t n, const RandGenParams<T> &params) {
 
     using D = std::student_t_distribution<T>;
 
-    return (_gen_rand_<T, D>(
+    return (_gen_rand_<T, D, A>(
                 n, params,
                 std::student_t_distribution<T>(params.n)));
 }
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_log_space_nums(std::size_t n, T first, T last, T base)  {
 
-    const T         step = (last - first) / (T(n) - T(1));
-    T               current = first;
-    std::vector<T>  result (n);
+    const T                                         step =
+        (last - first) / (T(n) - T(1));
+    T                                               current = first;
+    std::vector<T, typename allocator_declare<T, A>::type>   result (n);
 
     for (auto iter = result.begin(); iter < result.end(); ++iter)  {
         const T val = ::pow(base, current);
@@ -416,12 +414,13 @@ gen_log_space_nums(std::size_t n, T first, T last, T base)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_even_space_nums(std::size_t n, T first, T last)  {
 
-    const T         step = (last - first) / T(n);
-    std::vector<T>  result;
+    const T                                         step =
+        (last - first) / T(n);
+    std::vector<T, typename allocator_declare<T, A>::type>   result;
 
     result.reserve(n + 1); // Make it efficient, if user wants to add last
     result.push_back(first);
@@ -433,11 +432,11 @@ gen_even_space_nums(std::size_t n, T first, T last)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_triangular_nums(T last, T first)  {
 
-    std::vector<T>  result;
+    std::vector<T, typename allocator_declare<T, A>::type>   result;
 
     // With arbitrary first and last values, it is hard to do result.reserve();
     //
@@ -452,24 +451,28 @@ gen_triangular_nums(T last, T first)  {
 
 // ----------------------------------------------------------------------------
 
-template<typename T>
-std::vector<T>
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
 gen_sym_triangle(std::size_t n, const T &start_val, bool normalize)  {
 
-    std::vector<T>      result;
-    const bool          is_even = ! (n & std::size_t(0x01)); 
-    const std::size_t   max_loop { n / 2 + (is_even ? 0 : 1) };
-    T                   sum { 0 };
+    std::vector<T, typename allocator_declare<T, A>::type>  result;
+    const bool                                              is_even {
+        ! (n & std::size_t(0x01))
+    };
+    const std::size_t                                       max_loop {
+        n / 2 + (is_even ? 0 : 1)
+    };
+    T                                                       sum { 0 };
 
     result.reserve(n);
-    for (std::size_t i = 0; i < max_loop; ++i)  {
-        const T val = start_val + i;
+    for (std::size_t i { 0 }; i < max_loop; ++i)  {
+        const T val { start_val + i };
 
         result.push_back(val);
         sum += val;
     }
-    for (long i = long(max_loop - (is_even ? 1 : 2)); i >= 0; --i)  {
-        const T &val = result[i];
+    for (long i { long(max_loop - (is_even ? 1 : 2)) }; i >= 0; --i)  {
+        const T &val { result[i] };
 
         result.push_back(val);
         sum += val;
@@ -478,6 +481,27 @@ gen_sym_triangle(std::size_t n, const T &start_val, bool normalize)  {
         std::transform(result.begin(), result.end(), result.begin(),
                        std::bind(std::divides<T>(), std::placeholders::_1,
                                  sum));
+
+    return (result);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename T, std::size_t A>
+std::vector<T, typename allocator_declare<T, A>::type>
+gen_dft_sample_freq(std::size_t n, T spacing)  {
+
+    std::vector<T, typename allocator_declare<T, A>::type>  result;
+    const T     multiplier = T(1) / (T(n) * spacing);
+    const long  mid_size = long((n - 1) / 2 + 1);
+
+    result.reserve(n);
+    for (long i = 0; i < mid_size; ++i)
+        result.push_back(i);
+    for (long i = 0; i < mid_size - 1; ++i)
+        result.push_back(-mid_size + i + 1);
+    for (std::size_t i = 0; i < result.size(); ++i)
+        result[i] *= multiplier;
 
     return (result);
 }

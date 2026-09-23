@@ -1,7 +1,7 @@
 // Hossein Moein
 // March 18, 2018
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -29,35 +29,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <cstdio>
+#include <DataFrame/DataFrameExports.h>
+#include <DataFrame/Utils/FixedSizeString.h>
+
 #include <ctime>
-#include <functional>
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <sys/timeb.h>
-#include <time.h>
-
-#if defined(_WIN32) || defined(_WIN64)
-#  include <windows.h>
-#  if defined(_MSC_VER) && defined(HMDF_SHARED)
-#    ifdef LIBRARY_EXPORTS
-#      define LIBRARY_API __declspec(dllexport)
-#    else
-#      define LIBRARY_API __declspec(dllimport)
-#    endif // LIBRARY_EXPORTS
-#  else
-#    define LIBRARY_API
-#  endif // _MSC_VER
-#  ifdef min
-#    undef min
-#  endif // min
-#  ifdef max
-#    undef max
-#  endif // max
-#else
-#  define LIBRARY_API
-#endif // _WIN32 || _WIN64
+#include <unordered_map>
 
 // ----------------------------------------------------------------------------
 
@@ -76,14 +55,19 @@ enum class DT_FORMAT : unsigned short int  {
     SCT_DT = 6,        // e.g. Sep 16, 1999
     DT_MMDDYYYY = 7,   // e.g. 09161999
     DT_YYYYMMDD = 8,   // e.g. 19990916
-    DT_TM2 = 9,        // e.g. 09/16/1999 13:51:04.256
-    DT_DATETIME = 10,  // e.g. 20010103   09:31:15.124
+    DT_TM2 = 9,        // e.g. 09/16/1999 13:51:04.124
+    DT_DATETIME = 10,  // e.g. 19990916 13:51:04.124
     DT_PRECISE = 11,   // e.g. 1516179600.874123908 = Epoch.Nanoseconds
-    ISO_DT_TM = 12,    // e.g. 2015-05-05 13:51:04.000234
-    ISO_DT = 13,       // e.g. 2015-05-05
+    ISO_DT_TM = 12,    // e.g. 1999-09-16 13:51:04.000234
+    ISO_DT = 13,       // e.g. 1999-09-16
+    ISO_DT_NANO = 14,  // e.g. 1999-09-16 13:51:04.123456789
+    AMR_DT_TM = 15,    // e.g. 09/16/1999 13:51:04.000234
+    EUR_DT_TM = 16,    // e.g. 16/09/1999 13:51:04.000234
 };
 
-// DO NOT change the values of these enums. They are offsets to an
+// --------------------------------------
+
+// DO NOT change the values of these enums. They are offsets to a
 // static array.
 //
 enum class DT_TIME_ZONE : short int  {
@@ -121,6 +105,44 @@ enum class DT_TIME_ZONE : short int  {
     EU_BUDAPEST = 30
 };
 
+inline static const
+std::unordered_map<std::string_view, DT_TIME_ZONE>  ZONE_STR_TO_TIME_ZONE  {
+    { "LOC", DT_TIME_ZONE::LOCAL },
+    { "GMT", DT_TIME_ZONE::GMT },
+    { "BUE", DT_TIME_ZONE::AM_BUENOS_AIRES },
+    { "CHI", DT_TIME_ZONE::AM_CHICAGO },
+    { "LAX", DT_TIME_ZONE::AM_LOS_ANGELES },
+    { "MEX", DT_TIME_ZONE::AM_MEXICO_CITY },
+    { "NYC", DT_TIME_ZONE::AM_NEW_YORK },
+    { "DXB", DT_TIME_ZONE::AS_DUBAI },
+    { "HKG", DT_TIME_ZONE::AS_HONG_KONG },
+    { "SHA", DT_TIME_ZONE::AS_SHANGHAI },
+    { "SIN", DT_TIME_ZONE::AS_SINGAPORE },
+    { "THR", DT_TIME_ZONE::AS_TEHRAN },
+    { "TLV", DT_TIME_ZONE::AS_TEL_AVIV },
+    { "TYO", DT_TIME_ZONE::AS_TOKYO },
+    { "MEL", DT_TIME_ZONE::AU_MELBOURNE },
+    { "SYD", DT_TIME_ZONE::AU_SYDNEY },
+    { "RIO", DT_TIME_ZONE::BR_RIO_DE_JANEIRO },
+    { "BER", DT_TIME_ZONE::EU_BERLIN },
+    { "LON", DT_TIME_ZONE::EU_LONDON },
+    { "MOW", DT_TIME_ZONE::EU_MOSCOW },
+    { "PAR", DT_TIME_ZONE::EU_PARIS },
+    { "ROM", DT_TIME_ZONE::EU_ROME },
+    { "VIE", DT_TIME_ZONE::EU_VIENNA },
+    { "ZRH", DT_TIME_ZONE::EU_ZURICH },
+    { "UTC", DT_TIME_ZONE::UTC },
+    { "SEL", DT_TIME_ZONE::AS_SEOUL },
+    { "TAY", DT_TIME_ZONE::AS_TAIPEI },
+    { "STO", DT_TIME_ZONE::EU_STOCKHOLM },
+    { "AKL", DT_TIME_ZONE::NZ },
+    { "OSL", DT_TIME_ZONE::EU_OSLO },
+    { "WAW", DT_TIME_ZONE::EU_WARSAW },
+    { "BUD", DT_TIME_ZONE::EU_BUDAPEST },
+};
+
+// --------------------------------------
+
 // 1 - 7 (Sunday - Saturday)
 // DO NOT change the numbers
 //
@@ -134,6 +156,8 @@ enum class DT_WEEKDAY : unsigned char  {
     FRI = 6,
     SAT = 7
 };
+
+// --------------------------------------
 
 // 1 - 12 (January - December)
 // DO NOT change the numbers
@@ -154,6 +178,8 @@ enum class DT_MONTH : unsigned char  {
     DEC = 12
 };
 
+// --------------------------------------
+
 // AME_STYLE: MM/DD/YYYY
 // EUR_STYLE: YYYY/MM/DD
 // ISO_STYLE: YYYY-MM-DD
@@ -167,7 +193,7 @@ enum class DT_DATE_STYLE : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-class LIBRARY_API DateTime {
+class   DateTime {
 
 public:
 
@@ -184,130 +210,160 @@ public:
 
     // Initialized to now
     //
-    explicit DateTime (DT_TIME_ZONE tz = DT_TIME_ZONE::LOCAL);
+    HMDF_API explicit DateTime(DT_TIME_ZONE tz = DT_TIME_ZONE::LOCAL);
 
-    explicit DateTime (DateType d,
-                       HourType hr = 0,
-                       MinuteType mn = 0,
-                       SecondType sc = 0,
-                       NanosecondType ns = 0,
-                       DT_TIME_ZONE tz = DT_TIME_ZONE::LOCAL);
+    HMDF_API explicit DateTime(DateType d,
+                               HourType hr = 0,
+                               MinuteType mn = 0,
+                               SecondType sc = 0,
+                               NanosecondType ns = 0,
+                               DT_TIME_ZONE tz = DT_TIME_ZONE::LOCAL);
 
     // Currently, the following formats are supported:
-    //  (1)  YYYYMMDD
+    //  (1)  YYYYMMDD [TZN]
     // AME_STYLE:
-    //  (2)  MM/DD/YYYY
-    //  (3)  MM/DD/YYYY HH
-    //  (4)  MM/DD/YYYY HH:MM
-    //  (5)  MM/DD/YYYY HH:MM:SS
-    //  (6)  MM/DD/YYYY HH:MM:SS.MMM
+    //  (2)  MM/DD/YYYY [TZN]
+    //  (3)  MM/DD/YYYY HH [TZN]
+    //  (4)  MM/DD/YYYY HH:MM [TZN]
+    //  (5)  MM/DD/YYYY HH:MM:SS [TZN]
+    //  (6)  MM/DD/YYYY HH:MM:SS.MMM [TZN]  // Milliseconds
+    //  (7)  MM/DD/YYYY HH:MM:SS.IIIIII [TZN]  // Microseconds
+    //  (8)  MM/DD/YYYY HH:MM:SS.NNNNNNNNN [TZN]  // Nanoseconds
     //
     // EUR_STYLE:
-    //  (7)  YYYY/MM/DD
-    //  (8)  YYYY/MM/DD HH
-    //  (9)  YYYY/MM/DD HH:MM
-    //  (10) YYYY/MM/DD HH:MM:SS
-    //  (11) YYYY/MM/DD HH:MM:SS.MMM
+    //  (9)  YYYY/MM/DD [TZN]
+    //  (10) YYYY/MM/DD HH [TZN]
+    //  (11) YYYY/MM/DD HH:MM [TZN]
+    //  (12) YYYY/MM/DD HH:MM:SS [TZN]
+    //  (13) YYYY/MM/DD HH:MM:SS.MMM [TZN]  // Milliseconds
+    //  (14) YYYY/MM/DD HH:MM:SS.IIIIII [TZN]  // Microseconds
+    //  (15) YYYY/MM/DD HH:MM:SS.NNNNNNNNN [TZN]  // Nanoseconds
     //
     // ISO_STYLE:
-    //  (12) YYYY-MM-DD
-    //  (13) YYYY-MM-DD HH
-    //  (14) YYYY-MM-DD HH:MM
-    //  (15) YYYY-MM-DD HH:MM:SS
-    //  (16) YYYY-MM-DD HH:MM:SS.MMM
+    //  (16) YYYY-MM-DD [TZN]
+    //  (17) YYYY-MM-DD HH [TZN]
+    //  (18) YYYY-MM-DD HH:MM [TZN]
+    //  (19) YYYY-MM-DD HH:MM:SS [TZN]
+    //  (20) YYYY-MM-DD HH:MM:SS.MMM [TZN]  // Milliseconds
+    //  (21) YYYY-MM-DD HH:MM:SS.IIIIII [TZN]  // Microseconds
+    //  (22) YYYY-MM-DD HH:MM:SS.NNNNNNNNN [TZN]  // Nanoseconds
     //
-    explicit DateTime (const char *s,
-                       DT_DATE_STYLE ds = DT_DATE_STYLE::YYYYMMDD,
-                       DT_TIME_ZONE tz = DT_TIME_ZONE::LOCAL);
+    HMDF_API explicit DateTime(const char *s,
+                               DT_DATE_STYLE ds = DT_DATE_STYLE::YYYYMMDD,
+                               DT_TIME_ZONE tz = DT_TIME_ZONE::LOCAL);
 
-    DateTime (const DateTime &that) = default;
-    DateTime (DateTime &&that) = default;
-    ~DateTime () = default;
+    HMDF_API DateTime(const DateTime &that);
+    HMDF_API DateTime(DateTime &&that);
+    HMDF_API ~DateTime();
 
-    DateTime &operator = (const DateTime &rhs) = default;
-    DateTime &operator = (DateTime &&rhs) = default;
+    HMDF_API DateTime &operator =(const DateTime &rhs);
+    HMDF_API DateTime &operator =(DateTime &&rhs);
 
     // A convenient method, if you already have a DateTime instance
     // and want to change the date/time quickly
     //
-    void set_time (EpochType the_time, NanosecondType nanosec = 0) noexcept;
+    HMDF_API void
+    set_time(EpochType the_time, NanosecondType nanosec = 0) noexcept;
 
     // NOTE: This method is not multithread-safe. This method
     //       modifies the TZ environment variable which changes the
     //       time zone for the entire program.
     //
-    void set_timezone (DT_TIME_ZONE tz);
-    DT_TIME_ZONE get_timezone () const;
+    HMDF_API void set_timezone(DT_TIME_ZONE tz);
+    [[nodiscard]] HMDF_API DT_TIME_ZONE get_timezone() const;
 
-    DateTime &operator = (DateType rhs);  // dt = 20181223
+    HMDF_API DateTime &operator =(DateType rhs);  // dt = 20181223
 
     // Currently, the following formats are supported:
-    //  1)  YYYYMMDD [LOCAL | GMT]
-    //  2)  YYYYMMDD HH:MM:SS.MMM [LOCAL | GMT]
+    //  (1)  YYYYMMDD [TZN]
+    //  (2)  YYYYMMDD HH [TZN]
+    //  (3)  YYYYMMDD HH:MM [TZN]
+    //  (4)  YYYYMMDD HH:MM:SS [TZN]
+    //  (5)  YYYYMMDD HH:MM:SS.MMM [TZN]
     //
-    DateTime &operator = (const char *rhs);  // dt = "20181223"
+    HMDF_API DateTime &operator =(const char *rhs);  // dt = "20181223"
 
-    // this (lhs) compared with rhs
+    // This compares lhs (self) with rhs
     //
-    EpochType compare(const DateTime &rhs) const;
+    [[nodiscard]] HMDF_API EpochType compare(const DateTime &rhs) const;
 
-    DateType date () const noexcept;            // eg. 20020303
-    DatePartType year () const noexcept;        // eg. 1990
-    DT_MONTH month () const noexcept;           // JAN - DEC
-    DatePartType dmonth () const noexcept;      // 1 - 31
-    DatePartType dyear () const noexcept;       // 1 - 366
-    DT_WEEKDAY dweek () const noexcept;         // SUN - SAT
-    HourType hour () const noexcept;            // 0 - 23
-    MinuteType minute () const noexcept;        // 0 - 59
-    SecondType sec () const noexcept;           // 0 - 59
-    MillisecondType msec () const noexcept;     // 0 - 999
-    MicrosecondType microsec () const noexcept; // 0 - 999,999
-    NanosecondType nanosec () const noexcept;   // 0 - 999,999,999
-    EpochType time () const noexcept;           // Like ::time()
-    LongTimeType long_time () const noexcept;   // Nano seconds since epoch
+    [[nodiscard]] HMDF_API DateType
+    date() const noexcept;       // eg. 20020303
+    [[nodiscard]] HMDF_API DatePartType
+    year() const noexcept;       // eg. 1990
+    [[nodiscard]] HMDF_API DT_MONTH
+    month() const noexcept;      // JAN - DEC
+    [[nodiscard]] HMDF_API DatePartType
+    dmonth() const noexcept;     // 1 - 31
+    [[nodiscard]] HMDF_API DatePartType
+    dyear() const noexcept;      // 1 - 366
+    [[nodiscard]] HMDF_API DT_WEEKDAY
+    dweek() const noexcept;      // SUN - SAT
+    [[nodiscard]] HMDF_API HourType
+    hour() const noexcept;       // 0 - 23
+    [[nodiscard]] HMDF_API MinuteType
+    minute() const noexcept;     // 0 - 59
+    [[nodiscard]] HMDF_API SecondType
+    sec() const noexcept;        // 0 - 59
+    [[nodiscard]] HMDF_API MillisecondType
+    msec() const noexcept;       // 0 - 999
+    [[nodiscard]] HMDF_API MicrosecondType
+    microsec() const noexcept;   // 0 - 999,999
+    [[nodiscard]] HMDF_API NanosecondType
+    nanosec() const noexcept;    // 0 - 999,999,999
+    [[nodiscard]] HMDF_API EpochType
+    time() const noexcept;       // Like ::time()
+    [[nodiscard]] HMDF_API EpochType
+    days() const noexcept;       // Total days since epoch
+    [[nodiscard]] HMDF_API LongTimeType
+    long_time() const noexcept;  // Nanosec since epoch
 
-    DatePartType days_in_month () const noexcept;  // 28, 29, 30, 31
+    HMDF_API operator double() const noexcept;
+
+    [[nodiscard]] HMDF_API DatePartType
+    days_in_month() const noexcept;  // 28, 29, 30, 31
 
     // These return the diff including the fraction of the unit.
     // That is why they return a double.
     // The diff could be +/- based on "this - that"
     //
-    double diff_seconds (const DateTime &that) const;
-    double diff_minutes (const DateTime &that) const noexcept;
-    double diff_hours (const DateTime &that) const noexcept;
-    double diff_days (const DateTime &that) const noexcept;
-    double diff_weekdays (const DateTime &that) const noexcept;
-    double diff_weeks (const DateTime &that) const noexcept;
+    [[nodiscard]] HMDF_API double diff_seconds(const DateTime &that) const;
+    [[nodiscard]] HMDF_API double diff_minutes(const DateTime &that) const;
+    [[nodiscard]] HMDF_API double diff_hours(const DateTime &that) const;
+    [[nodiscard]] HMDF_API double diff_days(const DateTime &that) const;
+    [[nodiscard]] HMDF_API double diff_weekdays(const DateTime &that) const;
+    [[nodiscard]] HMDF_API double diff_weeks(const DateTime &that) const;
 
     // The parameter to these methods could be +/-.
     // It will advance/pull back the date/time accordingly.
     //
-    void add_nanoseconds (long nanosecs) noexcept;
-    void add_seconds (EpochType secs) noexcept;
-    void add_days (long days) noexcept;
-    void add_weekdays (long days) noexcept;
-    void add_months (long months) noexcept;
-    void add_years (long years) noexcept;
+    HMDF_API void add_nanoseconds(long nanosecs) noexcept;
+    HMDF_API void add_seconds(EpochType secs) noexcept;
+    HMDF_API void add_days(long days) noexcept;
+    HMDF_API void add_weekdays(long days) noexcept;
+    HMDF_API void add_months(long months) noexcept;
+    HMDF_API void add_years(long years) noexcept;
 
-    bool is_weekend () const noexcept;
-    bool is_newyear () const noexcept;
-    bool is_xmas () const noexcept;
-    bool is_us_business_day () const noexcept;
-    bool is_us_bank_holiday () const noexcept;
-    bool is_valid () const noexcept;
+    [[nodiscard]] HMDF_API bool is_weekend() const noexcept;
+    [[nodiscard]] HMDF_API bool is_newyear() const noexcept;
+    [[nodiscard]] HMDF_API bool is_leap_year() const noexcept;
+    [[nodiscard]] HMDF_API bool is_xmas() const noexcept;
+    [[nodiscard]] HMDF_API bool is_us_business_day() const noexcept;
+    [[nodiscard]] HMDF_API bool is_us_bank_holiday() const noexcept;
+    [[nodiscard]] HMDF_API bool is_valid() const noexcept;
 
     // Formats date/time into a string based on format parameter
     //
     template<typename T>
-    void date_to_str (DT_FORMAT format, T &result) const;
-    std::string string_format (DT_FORMAT format) const;
+    void date_to_str(DT_FORMAT format, T &result) const;
+    [[nodiscard]] HMDF_API std::string string_format(DT_FORMAT format) const;
 
 private:
 
     template<typename T>
     using INVALID_VALUE_ = typename std::numeric_limits<T>;
 
-    inline static const char    *TIMEZONES_[] {
+    inline static const char    *TIMEZONES_[]  {
 #ifdef _MSC_VER
         "\"TZ=GMT\"",
         "\"TZ=Argentina Standard Time\"",        // "America/Buenos_Aires",
@@ -367,48 +423,52 @@ private:
         "UTC",
         "Asia/Seoul",
         "Asia/Taipei",
-        "Eurpoe/Stockholm",
+        "Europe/Stockholm",
         "NZ",
         "Europe/Oslo",
         "Europe/Warsaw",
         "Europe/Budapest"
 #endif // _MSC_VER
     };
-    inline static const EpochType   INVALID_TIME_T_ {
+    inline static const EpochType   INVALID_TIME_T_  {
         INVALID_VALUE_<EpochType>::max()
     };
-    inline static const DateType    INVALID_DATE_ {
+    inline static const DateType    INVALID_DATE_  {
         INVALID_VALUE_<DateType>::max()
     };
-    inline static const HourType    INVALID_HOUR_ {
+    inline static const HourType    INVALID_HOUR_  {
         INVALID_VALUE_<HourType>::max()
     };
-    inline static const MinuteType  INVALID_MINUTE_ {
+    inline static const MinuteType  INVALID_MINUTE_  {
         INVALID_VALUE_<MinuteType>::max()
     };
-    inline static const SecondType  INVALID_SECOND_ {
+    inline static const SecondType  INVALID_SECOND_  {
         INVALID_VALUE_<SecondType>::max()
+    };
+    inline static const DatePartType  INVALID_DYEAR_  {
+        INVALID_VALUE_<DatePartType>::max()
     };
 
     // This guy initializes anything that needs to be initialized
     // statically.
     //
     struct  DT_initializer  {
-        DT_initializer () noexcept  {
+        DT_initializer() noexcept  {
 #ifdef _MSC_VER
-            _tzset ();
+            _tzset();
 #else
-            ::tzset ();
+            ::tzset();
 #endif // _MSC_VER
         }
     };
 
-    inline static const DT_initializer  dt_init_ {  };
+    inline static const DT_initializer  dt_init_  {   };
 
     DateType        date_ { INVALID_DATE_ };  // Like 20190518
     HourType        hour_ { INVALID_HOUR_ };
     MinuteType      minute_ { INVALID_MINUTE_ };
     SecondType      second_ { INVALID_SECOND_ };
+    DatePartType    dyear_ { INVALID_DYEAR_ };  // 1 - 366, cached day-of-year
     NanosecondType  nanosecond_ { 0 };
     EpochType       time_ { INVALID_TIME_T_ }; // Sec since 01/01/1970 (Epoch)
     DT_WEEKDAY      week_day_ { DT_WEEKDAY::BAD_DAY };
@@ -417,22 +477,22 @@ private:
     inline static void change_env_timezone_(DT_TIME_ZONE time_zone);
     inline static void reset_env_timezone_(DT_TIME_ZONE time_zone);
 
-    static DatePartType
-    days_in_month_ (DT_MONTH month, DatePartType year) noexcept;
+    [[nodiscard]] static DatePartType
+    days_in_month_(DT_MONTH month, DatePartType year) noexcept;
 
     // NOTE: This method is not multithread-safe. This method
     //       modifies the TZ environment variable which changes the
     //       time zone for the entire program.
     //
-    EpochType maketime_ (struct tm &ltime) const noexcept;
+    [[nodiscard]] EpochType maketime_(struct tm &ltime) const noexcept;
 
     // NOTE: This method is not multithread-safe. This method
     //       modifies the TZ environment variable which changes the
     //       time zone for the entire program.
     //
-    void breaktime_ (EpochType the_time, NanosecondType nanosec) noexcept;
+    void breaktime_(EpochType the_time, NanosecondType nanosec) noexcept;
 
-    inline static const char *const MONTH_[] {
+    inline static const char *const MONTH_[]  {
         "January",
         "February",
         "March",
@@ -446,7 +506,7 @@ private:
         "November",
         "December"
     };
-    inline static const char *const MONTH_BR_[] {
+    inline static const char *const MONTH_BR_[]  {
         "Jan",
         "Feb",
         "Mar",
@@ -460,7 +520,7 @@ private:
         "Nov",
         "Dec"
     };
-    inline static const char *const WDAY_[] {
+    inline static const char *const WDAY_[]  {
         "Sunday",
         "Monday",
         "Tuesday",
@@ -469,60 +529,243 @@ private:
         "Friday",
         "Saturday"
     };
-    inline static const char *const WDAY_BR_[] {
+    inline static const char *const WDAY_BR_[]  {
         "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
     };
 };
 
 // ----------------------------------------------------------------------------
 
-inline bool operator == (const DateTime &lhs, const DateTime &rhs) noexcept  {
+template<typename T>
+void DateTime::date_to_str(DT_FORMAT format, T &result) const  {
 
-    return (lhs.compare (rhs) == 0);
-}
+    String128   buffer;
 
-// ----------------------------------------------------------------------------
+    switch (format)  {
+        case DT_FORMAT::ISO_DT_TM:
+        {
+            buffer.printf("%d-%002d-%002d %002d:%002d:%002d.%0000006d",
+                          static_cast<int>(year()),
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(hour()),
+                          static_cast<int>(minute()),
+                          static_cast<int>(sec()),
+                          static_cast<int>(microsec()));
+        } break;
 
-inline bool operator != (const DateTime &lhs, const DateTime &rhs) noexcept  {
+        case DT_FORMAT::AMR_DT_TM:
+        {
+            buffer.printf("%002d/%002d/%d %002d:%002d:%002d.%0000006d",
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(year()),
+                          static_cast<int>(hour()),
+                          static_cast<int>(minute()),
+                          static_cast<int>(sec()),
+                          static_cast<int>(microsec()));
+        } break;
 
-    return (lhs.compare (rhs) != 0);
-}
+        case DT_FORMAT::EUR_DT_TM:
+        {
+            buffer.printf("%002d/%002d/%d %002d:%002d:%002d.%0000006d",
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(month()),
+                          static_cast<int>(year()),
+                          static_cast<int>(hour()),
+                          static_cast<int>(minute()),
+                          static_cast<int>(sec()),
+                          static_cast<int>(microsec()));
+        } break;
 
-// ----------------------------------------------------------------------------
+        case DT_FORMAT::AMR_DT:
+        {
+            buffer.printf("%002d/%002d/%002d",
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(year()) % 100);
+        } break;
 
-inline bool operator < (const DateTime &lhs, const DateTime &rhs) noexcept  {
+        case DT_FORMAT::AMR_DT_CTY:
+        {
+            buffer.printf("%002d/%002d/%d",
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(year()));
+        } break;
 
-    return (lhs.compare (rhs) < 0);
-}
+        case DT_FORMAT::EUR_DT:
+        {
+            buffer.printf("%002d/%002d/%002d",
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(month()),
+                          static_cast<int>(year()) % 100);
+        } break;
 
-// ----------------------------------------------------------------------------
+        case DT_FORMAT::EUR_DT_CTY:
+        {
+            buffer.printf("%002d/%002d/%d",
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(month()),
+                          static_cast<int>(year()));
+        } break;
 
-inline bool operator <= (const DateTime &lhs, const DateTime &rhs) noexcept  {
+        case DT_FORMAT::DT_TM:
+        {
+            buffer.printf("%002d/%002d/%d %002d:%002d:%002d",
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(year()),
+                          static_cast<int>(hour()),
+                          static_cast<int>(minute()),
+                          static_cast<int>(sec()));
+        } break;
 
-    return (lhs.compare (rhs) <= 0);
-}
+        case DT_FORMAT::DT_TM2:
+        {
+            buffer.printf("%002d/%002d/%d %002d:%002d:%002d.%0003d",
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(year()),
+                          static_cast<int>(hour()),
+                          static_cast<int>(minute()),
+                          static_cast<int>(sec()),
+                          static_cast<int>(msec()));
+        } break;
 
-// ----------------------------------------------------------------------------
+        case DT_FORMAT::ISO_DT:
+        {
+            buffer.printf("%d-%002d-%002d",
+                          static_cast<int>(year()),
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()));
+        } break;
 
-inline bool operator > (const DateTime &lhs, const DateTime &rhs) noexcept  {
+        case DT_FORMAT::ISO_DT_NANO:
+        {
+            buffer.printf("%d-%002d-%002d %002d:%002d:%002d.%0000000009d",
+                          static_cast<int>(year()),
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(hour()),
+                          static_cast<int>(minute()),
+                          static_cast<int>(sec()),
+                          static_cast<int>(nanosec()));
+        } break;
 
-    return (lhs.compare (rhs) > 0);
-}
+        case DT_FORMAT::DT_DATETIME:
+        {
+            buffer.printf("%d%002d%002d  %002d:%002d:%002d.%0003d",
+                          static_cast<int>(year()),
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(hour()),
+                          static_cast<int>(minute()),
+                          static_cast<int>(sec()),
+                          static_cast<int>(msec()));
+        } break;
 
-// ----------------------------------------------------------------------------
+        case DT_FORMAT::SCT_DT:
+        {
+            buffer.printf("%s %002d, %d",
+                          MONTH_BR_[static_cast<int>(month()) - 1],
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(year()));
+        } break;
 
-inline bool operator >= (const DateTime &lhs, const DateTime &rhs) noexcept  {
+        case DT_FORMAT::DT_MMDDYYYY:
+        {
+            buffer.printf("%002d%002d%d",
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()),
+                          static_cast<int>(year()));
+        } break;
 
-    return (lhs.compare (rhs) >= 0);
+        case DT_FORMAT::DT_YYYYMMDD:
+        {
+            buffer.printf("%002d%002d%002d",
+                          static_cast<int>(year()),
+                          static_cast<int>(month()),
+                          static_cast<int>(dmonth()));
+        } break;
+
+        case DT_FORMAT::DT_PRECISE:  // e.g. Epoch.Nanoseconds
+        {
+            buffer.printf("%ld.%d", this->time(), nanosec());
+        } break;
+
+        default:
+        {
+            buffer.printf("ERROR: DateTime::date_to_str(): "
+                          "Unknown format: '%u'",
+                          format);
+            throw std::runtime_error(buffer.c_str());
+        }
+    }
+
+    result = buffer.c_str();
+    return;
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename S>
-inline S &operator << (S &o, const DateTime &rhs)  {
+inline S &operator <<(S &o, const DateTime &rhs)  {
 
-    return (o << rhs.string_format (DT_FORMAT::DT_TM2));
+    return (o << rhs.string_format(DT_FORMAT::DT_TM2));
 }
+
+// ----------------------------------------------------------------------------
+
+[[nodiscard]] HMDF_API bool
+operator ==(const DateTime &lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API bool
+operator !=(const DateTime &lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API bool
+operator <(const DateTime &lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API bool
+operator <=(const DateTime &lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API bool
+operator >(const DateTime &lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API bool
+operator >=(const DateTime &lhs, const DateTime &rhs) noexcept;
+
+[[nodiscard]] HMDF_API double
+operator +(const DateTime &lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API double
+operator -(const DateTime &lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API double
+operator *(const DateTime &lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API double
+operator /(const DateTime &lhs, const DateTime &rhs) noexcept;
+
+[[nodiscard]] HMDF_API double
+operator +(const DateTime &lhs, double rhs) noexcept;
+[[nodiscard]] HMDF_API double
+operator -(const DateTime &lhs, double rhs) noexcept;
+[[nodiscard]] HMDF_API double
+operator *(const DateTime &lhs, double rhs) noexcept;
+[[nodiscard]] HMDF_API double
+operator /(const DateTime &lhs, double rhs) noexcept;
+
+[[nodiscard]] HMDF_API double
+operator +(double lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API double
+operator -(double lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API double
+operator *(double lhs, const DateTime &rhs) noexcept;
+[[nodiscard]] HMDF_API double
+operator /(double lhs, const DateTime &rhs) noexcept;
+
+HMDF_API DateTime &operator +=(DateTime &lhs, double rhs) noexcept;
+HMDF_API DateTime &operator -=(DateTime &lhs, double rhs) noexcept;
+HMDF_API DateTime &operator *=(DateTime &lhs, double rhs) noexcept;
+HMDF_API DateTime &operator /=(DateTime &lhs, double rhs) noexcept;
+
+HMDF_API double &operator +=(double &lhs, const DateTime &rhs) noexcept;
+HMDF_API double &operator -=(double &lhs, const DateTime &rhs) noexcept;
+HMDF_API double &operator *=(double &lhs, const DateTime &rhs) noexcept;
+HMDF_API double &operator /=(double &lhs, const DateTime &rhs) noexcept;
 
 } // namespace hmdf
 
@@ -533,9 +776,9 @@ template<>
 struct  hash<typename hmdf::DateTime>  {
 
     inline size_t
-    operator()(const typename hmdf::DateTime &key) const noexcept {
+    operator()(const typename hmdf::DateTime &key) const noexcept  {
 
-        return (hash<typename hmdf::DateTime::LongTimeType>()(key.long_time()));
+        return (hash<double>()(double(key)));
     }
 };
 

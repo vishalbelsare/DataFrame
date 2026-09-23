@@ -1,7 +1,7 @@
 // Hossein Moein
 // July 17 2009
 /*
-Copyright (c) 2019-2022, Hossein Moein
+Copyright (c) 2019-2026, Hossein Moein
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -32,21 +32,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
-#include <iostream>
-#include <string.h>
-
-#if defined(_WIN32) || defined(_WIN64)
-#  if defined(_MSC_VER) && defined(HMDF_SHARED)
-#    ifdef LIBRARY_EXPORTS
-#      define LIBRARY_API __declspec(dllexport)
-#    else
-#      define LIBRARY_API __declspec(dllimport)
-#    endif // LIBRARY_EXPORTS
-#  else
-#    define LIBRARY_API
-#  endif // _MSC_VER
-#endif // _WIN32 || _WIN64
+#include <string>
 
 // ----------------------------------------------------------------------------
 
@@ -57,15 +45,15 @@ namespace hmdf
 
 // This abstract base class makes it possible to pass different template
 // instances around as one type and to be able to assign them interchangeably.
-// The only penalty paid for having this base class is to carry around one
-// additional (pointer size) member. There shouldn't be any performace
+// The only penalty paid for having this base class is to carry around two
+// additional (pointer size) members. There shouldn't be any performance
 // penalty, since everything is still stack based and there is no virtuality.
 //
 // NOTE: VirtualString MAKES NO BOUNDARY CHECKS. IT IS THE RESPONSIBILITY
 //       OF THE PROGRAMMER TO TAKE CARE OF THAT.
 //
 
-class LIBRARY_API   VirtualString {
+class   VirtualString {
 
 public:
 
@@ -80,34 +68,35 @@ public:
 
     inline static const size_type  npos = static_cast<size_type>(-1);
 
-    inline iterator begin () noexcept  { return (string_); }
-    inline const_iterator begin () const noexcept  { return (string_); }
+    [[nodiscard]] inline iterator begin() noexcept  { return (string_); }
+    [[nodiscard]] inline const_iterator
+    begin() const noexcept  { return (string_); }
+    [[nodiscard]] inline iterator end() noexcept { return (string_ + size()); }
+    [[nodiscard]] inline const_iterator
+    end() const noexcept  { return (string_ + size()); }
 
-    // Unfortunately, the following two methods are not as cheap as they are
-    // supposed to be.
-    //
-    inline iterator end() noexcept  { return (string_ + size ()); }
-    inline const_iterator end() const noexcept  { return (string_ + size ()); }
-
-    VirtualString () = delete;
-    VirtualString (const VirtualString &) = delete;
-    VirtualString (VirtualString &&) = delete;
-    VirtualString &operator = (VirtualString &&) = delete;
+    VirtualString() = delete;
+    VirtualString(const VirtualString &) = delete;
+    VirtualString(VirtualString &&) = delete;
+    VirtualString &operator =(VirtualString &&) = delete;
 
     // Assignment methods.
     //
-    inline VirtualString &operator = (const_pointer rhs) noexcept  {
+    inline VirtualString &operator =(const_pointer rhs) noexcept  {
 
-        ::strcpy (string_, rhs);
+        ::strcpy(string_, rhs);
+        _forced_size();
         return (*this);
     }
-    inline VirtualString &operator = (const VirtualString &rhs) noexcept  {
+    inline VirtualString &operator =(const VirtualString &rhs) noexcept  {
 
-        return (*this = rhs.c_str ());
+        return (*this = rhs.c_str());
     }
-    inline VirtualString &ncopy (const_pointer rhs, size_type len) noexcept  {
+    [[nodiscard]] inline VirtualString &
+    ncopy(const_pointer rhs, size_type len) noexcept  {
 
         snprintf_nowarn(string_, len, "%s", rhs);
+        _forced_size();
         return (*this);
     }
 
@@ -115,216 +104,213 @@ public:
     // Appending methods.
     //
 
-    inline VirtualString &append (const_pointer rhs) noexcept  {
+    inline VirtualString &append(const_pointer rhs) noexcept  {
 
-        ::strcat (string_, rhs);
+        const size_type rhs_len { ::strlen(rhs) };
+
+        std::memcpy(string_ + size_, rhs, rhs_len + 1);  // +1 copies the NULL
+        size_ += rhs_len;
         return (*this);
     }
-    inline VirtualString &append (const VirtualString &rhs) noexcept  {
+    inline VirtualString &append(const VirtualString &rhs) noexcept  {
 
-        return (append (rhs.c_str ()));
+        return (append(rhs.c_str()));
     }
-    inline VirtualString &operator += (const_pointer rhs) noexcept  {
+    inline VirtualString &operator +=(const_pointer rhs) noexcept  {
 
-        return (append (rhs));
+        return (append(rhs));
     }
-    inline VirtualString &operator += (const VirtualString &rhs) noexcept  {
+    inline VirtualString &operator +=(const VirtualString &rhs) noexcept  {
 
-        return (append (rhs.c_str ()));
-    }
-
-    inline size_type
-    find (const_reference token, size_type pos = 0) const noexcept  {
-
-        size_type   counter = 0;
-
-        for (const_pointer itr = &(string_ [pos]); *itr; ++itr, ++counter)
-            if (string_ [pos + counter] == token)
-                return (pos + counter);
-
-        return (npos);
-    }
-    inline size_type
-    find (const_pointer token, size_type pos = 0) const noexcept  {
-
-        const size_type token_len = ::strlen (token);
-        const size_type self_len = size ();
-
-        if ((token_len + pos) > self_len)
-            return (npos);
-
-        size_type   counter = 0;
-
-        for (const_pointer itr = &(string_ [pos]);
-             itr + token_len - begin () <= static_cast<int>(self_len);
-             ++itr, ++counter)
-            if (! ::strncmp (token, itr, token_len))
-                return (pos + counter);
-
-        return (npos);
-    }
-    inline size_type
-    find (const VirtualString &token, size_type pos = 0) const noexcept  {
-
-        return (find (token.c_str (), pos));
+        return (append(rhs.c_str()));
     }
 
-    // Replaces the substring statring at pos with length n with s
-    //
-    inline VirtualString &
-    replace (size_type pos, size_type n, const_pointer s)  {
+    [[nodiscard]] inline size_type
+    find(const_reference token, size_type pos = 0) const noexcept  {
 
-        if (*s == 0)  {
-            size_type   i = pos;
+        const auto  ret { ::strchr(string_ + pos, token) };
 
-            for (; string_ [i]; ++i)
-                string_ [i] = string_ [i + 1];
-            string_ [i] = string_ [i + 1];
-        }
-        else  {
-            bool        overwrote_null = false;
-            size_type   i = 0;
+        return (ret != nullptr ? static_cast<size_type>(ret - string_) : npos);
+    }
+    [[nodiscard]] inline size_type
+    find(const_pointer token, size_type pos = 0) const noexcept  {
 
-            while (s [i])  {
-                if (string_ [i + pos] == 0)
-                    overwrote_null = 0;
-                if (i >= n)
-                    string_ [i + pos + 1] = string_ [i + pos];
-                string_ [i + pos] = s [i];
-                ++i;
-            }
-            if (overwrote_null)
-                string_ [i + pos] = 0;
-        }
+        const auto  ret { ::strstr(string_ + pos, token) };
 
-        return (*this);
+        return (ret != nullptr ? static_cast<size_type>(ret - string_) : npos);
+    }
+    [[nodiscard]] inline size_type
+    find(const VirtualString &token, size_type pos = 0) const noexcept  {
+
+        return (find(token.c_str(), pos));
     }
 
-    inline int printf (const char *format_str, ...) noexcept  {
+    inline int printf(const char *format_str, ...) noexcept  {
 
         va_list argument_ptr;
 
-        va_start (argument_ptr, format_str);
+        va_start(argument_ptr, format_str);
 
-        const int   ret = ::vsprintf (string_, format_str, argument_ptr);
+        const int   ret {
+            ::vsnprintf(string_, 1000000, format_str, argument_ptr)
+        };
 
-        va_end (argument_ptr);
+        va_end(argument_ptr);
+        if (ret >= 0)  size_ = static_cast<size_type>(ret);
+        else  _forced_size();
         return (ret);
     }
 
-    inline int append_printf (const char *format_str, ...) noexcept  {
+    inline int append_printf(const char *format_str, ...) noexcept  {
 
         va_list argument_ptr;
 
-        va_start (argument_ptr, format_str);
+        va_start(argument_ptr, format_str);
 
-        const int   ret =
-            ::vsprintf (string_ + size (), format_str, argument_ptr);
+        const int   ret {
+            ::vsnprintf(string_ + size(), 1000000, format_str, argument_ptr)
+        };
 
-        va_end (argument_ptr);
+        va_end(argument_ptr);
+        if (ret >= 0)  size_ = static_cast<size_type>(ret);
+        else  _forced_size();
         return (ret);
     }
 
     // Comparison methods.
     //
-    inline int compare (const_pointer rhs) const noexcept  {
+    [[nodiscard]] inline int compare(const_pointer rhs) const noexcept  {
 
-        return (::strcmp (string_, rhs));
+        return (::strcmp(string_, rhs));
     }
-    inline int compare (const VirtualString &rhs) const noexcept  {
+    [[nodiscard]] inline int
+    compare(const VirtualString &rhs) const noexcept  {
 
-        return (compare (rhs.c_str ()));
+        return (compare(rhs.c_str()));
     }
 
-    inline bool operator == (const_pointer rhs) const noexcept  {
+    [[nodiscard]] inline bool operator ==(const_pointer rhs) const noexcept  {
 
-        return (compare (rhs) == 0);
+        return (compare(rhs) == 0);
     }
-    inline bool operator == (const VirtualString &rhs) const noexcept  {
+    [[nodiscard]] inline bool
+    operator ==(const VirtualString &rhs) const noexcept  {
 
-        return (*this == rhs.c_str ());
+        return (*this == rhs.c_str());
     }
-    inline bool operator != (const_pointer rhs) const noexcept  {
+    [[nodiscard]] inline bool operator !=(const_pointer rhs) const noexcept  {
 
-        return (compare (rhs) != 0);
+        return (compare(rhs) != 0);
     }
-    inline bool operator != (const VirtualString &rhs) const noexcept  {
+    [[nodiscard]] inline bool
+    operator !=(const VirtualString &rhs) const noexcept  {
 
-        return (*this != rhs.c_str ());
+        return (*this != rhs.c_str());
     }
-    inline bool operator > (const_pointer rhs) const noexcept  {
+    [[nodiscard]] inline bool operator >(const_pointer rhs) const noexcept  {
 
-        return (compare (rhs) > 0);
+        return (compare(rhs) > 0);
     }
-    inline bool operator > (const VirtualString &rhs) const noexcept  {
+    [[nodiscard]] inline bool operator >=(const_pointer rhs) const noexcept  {
 
-        return (*this > rhs.c_str ());
+        return (compare(rhs) >= 0);
     }
-    inline bool operator < (const_pointer rhs) const noexcept  {
+    [[nodiscard]] inline bool
+    operator >(const VirtualString &rhs) const noexcept  {
 
-        return (compare (rhs) < 0);
+        return (*this > rhs.c_str());
     }
-    inline bool operator < (const VirtualString &rhs) const noexcept  {
+    [[nodiscard]] inline bool
+    operator >=(const VirtualString &rhs) const noexcept  {
 
-        return (*this < rhs.c_str ());
+        return (*this >= rhs.c_str());
+    }
+    [[nodiscard]] inline bool operator <(const_pointer rhs) const noexcept  {
+
+        return (compare(rhs) < 0);
+    }
+    [[nodiscard]] inline bool operator <=(const_pointer rhs) const noexcept  {
+
+        return (compare(rhs) <= 0);
+    }
+    [[nodiscard]] inline bool
+    operator <(const VirtualString &rhs) const noexcept  {
+
+        return (*this < rhs.c_str());
+    }
+    [[nodiscard]] inline bool
+    operator <=(const VirtualString &rhs) const noexcept  {
+
+        return (*this <= rhs.c_str());
     }
 
     // char based access methods.
     //
-    inline const_reference operator [] (size_type index) const noexcept  {
+    [[nodiscard]] inline const_reference
+    operator [](size_type index) const noexcept  {
 
-        return (string_ [index]);
+        return (string_[index]);
     }
-    inline reference operator [] (size_type index) noexcept  {
+    [[nodiscard]] inline reference operator [](size_type index) noexcept  {
 
-        return (string_ [index]);
+        return (string_[index]);
     }
 
-    inline void clear () noexcept  { *string_ = 0; }
+    inline void clear() noexcept  { *string_ = 0; size_ = 0; }
 
     // These two make it compatible with std::string
     //
-    inline void resize (size_type) noexcept  {  }
-    inline void resize (size_type, value_type) noexcept  {  }
+    inline void resize(size_type) noexcept  {  }
+    inline void resize(size_type, value_type) noexcept  {  }
 
     // const utility methods.
     //
-    inline const_pointer c_str () const noexcept  { return (string_); }
-    inline const_pointer sub_c_str (size_type offset) const noexcept  {
+    [[nodiscard]] inline const_pointer
+    c_str() const noexcept  { return (string_); }
+
+    [[nodiscard]] inline const_pointer
+    data() const noexcept  { return (string_); }
+    [[nodiscard]] inline pointer data() noexcept  { return (string_); }
+
+    [[nodiscard]] inline const_pointer
+    sub_c_str(size_type offset) const noexcept  {
 
         return (offset != npos ? string_ + offset : nullptr);
     }
-    inline size_type size () const noexcept { return (::strlen(string_)); }
-    inline bool empty () const noexcept  { return (*string_ == 0); }
+    [[nodiscard]] inline size_type size() const noexcept  { return (size_); }
+    [[nodiscard]] inline bool empty() const noexcept  { return (size_ == 0); }
 
     // Fowler–Noll–Vo (FNV-1a) hash function
     // This is for 64-bit systems
     //
-    inline size_type hash () const noexcept {
+    [[nodiscard]] inline size_type hash() const noexcept {
 
-        size_type       h = 14695981039346656037UL; // offset basis
-        const_pointer   s = string_;
+        size_type   h { 14695981039346656037UL }; // offset basis
 
-        while (*(s++)) { h = (h ^ *s) * 1099511628211UL; } // 64bit prime
+        for (const_pointer s { string_ }; *s; ++s)
+            h = (h ^ static_cast<unsigned char>(*s)) * 1099511628211UL;
         return (h);
     }
 
 protected:
 
-    inline VirtualString (pointer str) noexcept : string_ (str)  {  }
+    inline VirtualString(pointer str) noexcept : string_(str)  {  }
+
+    inline void _forced_size()  { size_ = ::strlen(string_); }
 
 private:
 
-    pointer string_;
+    pointer     string_;
+    size_type   size_ { 0 };
 };
 
 // ----------------------------------------------------------------------------
 
 // This is a fixed size NTBS. Its sole purpose is performance. Most often
 // programmers use utility strings with known upper limit size.
-// FixedSizeString makes no dynamic allocation/deallocation and is
-// strictly stack based. This will improve the performance of multi-threaded
-// applications that use a lot of utiltiy strings.
+// FixedSizeString makes no dynamic allocation/de-allocation and is
+// strictly stack based. This will improve the performance of multithreading
+// applications that use a lot of utility strings.
 //
 // NOTE: FixedSizeString makes no boundary checks. It is the
 //       responsibility of the programmer to take care of that.
@@ -334,50 +320,76 @@ class   FixedSizeString : public VirtualString  {
 
 public:
 
-    inline FixedSizeString () noexcept
-        : VirtualString (buffer_) { *buffer_ = 0; }
-    inline FixedSizeString (const_pointer str) noexcept
-        : VirtualString (buffer_)  { *this = str; }
-    inline FixedSizeString (const FixedSizeString &that) noexcept
-        : VirtualString (buffer_)  { *this = that; }
-    inline FixedSizeString (const VirtualString &that) noexcept
-        : VirtualString (buffer_)  { *this = that; }
+    inline FixedSizeString() noexcept
+        : VirtualString(buffer_) { *buffer_ = 0; _forced_size(); }
+    inline FixedSizeString(const_pointer str) noexcept
+        : VirtualString(buffer_)  { *this = str; }
+    inline FixedSizeString(const FixedSizeString &that) noexcept
+        : VirtualString(buffer_)  { *this = that; }
+    inline FixedSizeString(const VirtualString &that) noexcept
+        : VirtualString(buffer_)  { *this = that; }
+    inline FixedSizeString(const std::string &that) noexcept
+        : VirtualString(buffer_)  { *this = that.c_str(); }
+
+    // This is a constructor with the same signature as std::string
+    // but here the size is ignored
+    //
+    inline FixedSizeString(size_type , value_type v) noexcept
+        : VirtualString(buffer_)  {
+
+        std::memset(buffer_, v, S);
+        buffer_[S] = 0;
+        _forced_size();
+    }
 
     // Assignment methods which cannot be inherited or virtual.
     //
-    inline FixedSizeString &operator = (const FixedSizeString &rhs) noexcept  {
+    inline FixedSizeString &operator =(const FixedSizeString &rhs) noexcept  {
 
-        ::strcpy (buffer_, rhs.buffer_);
+        ::strcpy(buffer_, rhs.buffer_);
+        _forced_size();
         return (*this);
     }
-    inline FixedSizeString &operator = (const_pointer rhs) noexcept {
+    inline FixedSizeString &operator =(const_pointer rhs) noexcept {
 
         snprintf_nowarn(buffer_, S, "%s", rhs);
+        _forced_size();
         return (*this);
     }
-    inline FixedSizeString &operator = (const VirtualString &rhs) noexcept  {
+    inline FixedSizeString &operator =(const VirtualString &rhs) noexcept  {
 
-        *this = rhs.c_str ();
+        *this = rhs.c_str();
+        return (*this);
+    }
+    inline FixedSizeString &operator =(const std::string &rhs) noexcept  {
+
+        snprintf_nowarn(buffer_, S, "%s", rhs.c_str());
+        _forced_size();
         return (*this);
     }
 
-    static inline size_type capacity () noexcept  { return (S); }
+    static inline size_type capacity() noexcept  { return (S); }
 
 private:
 
-    value_type  buffer_ [S + 1];
+    value_type  buffer_[S + 1];
 };
 
 // ----------------------------------------------------------------------------
 
-template<typename S>
-inline S &operator << (S &lhs, const VirtualString &rhs)  {
+template<typename CharT, typename Traits>
+inline std::basic_ostream<CharT, Traits> &
+operator <<(std::basic_ostream<CharT, Traits> &lhs, const VirtualString &rhs) {
 
-    return (lhs << rhs.c_str ());
+    return (lhs << rhs.c_str());
 }
 
 // ----------------------------------------------------------------------------
 
+// Convenient typedefs
+//
+using String8 = FixedSizeString<7>;
+using String16 = FixedSizeString<15>;
 using String32 = FixedSizeString<31>;
 using String64 = FixedSizeString<63>;
 using String128 = FixedSizeString<127>;
